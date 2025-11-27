@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { CalendarEvent, ViewMode } from '../types';
-import { getStartOfWeek, addDays, isSameDay, formatTime, getEventTypeColor } from '../utils';
+import { getStartOfWeek, addDays, isSameDay, formatTime, getEventTypeColor, getWeekNumber } from '../utils';
 import { ChevronLeft, ChevronRight, Calendar as CalIcon } from 'lucide-react';
 
 interface CalendarProps {
@@ -44,7 +44,7 @@ export const Calendar: React.FC<CalendarProps> = ({ events, mode }) => {
         <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
           <CalIcon className="w-5 h-5 text-indigo-600" />
           {mode === ViewMode.CALENDAR_WEEK 
-            ? `Tuần ${currentDate.toLocaleDateString('vi-VN', { week: 'numeric' })} - Tháng ${currentDate.getMonth() + 1}`
+            ? `Tuần ${getWeekNumber(currentDate)} - Tháng ${currentDate.getMonth() + 1}`
             : `Tháng ${currentDate.getMonth() + 1}/${currentDate.getFullYear()}`
           }
         </h2>

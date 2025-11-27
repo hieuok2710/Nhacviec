@@ -41,6 +41,15 @@ export const isSameDay = (d1: Date, d2: Date): boolean => {
   );
 };
 
+// Hàm tính số tuần (ISO week number)
+export const getWeekNumber = (date: Date): number => {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNum = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  return Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+};
+
 export const isOverdue = (date: Date): boolean => {
   const now = new Date();
   now.setHours(0, 0, 0, 0);

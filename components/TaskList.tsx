@@ -81,15 +81,16 @@ export const TaskList: React.FC<TaskListProps> = ({ tasks, onToggle, onAddTask }
     setIsAdding(false);
   };
 
-  // Sort tasks: Due Date (asc) -> Priority (desc) -> Creation (implicit)
+  // Sort tasks: Due Date (Nearest to Farthest) -> Priority
   const pendingTasks = tasks
     .filter(t => !t.completed)
     .sort((a, b) => {
-      // 1. Due date check
+      // 1. Due date check (Nearest Date First)
       if (a.dueDate && b.dueDate) {
         return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
       }
-      if (a.dueDate) return -1; // Tasks with date come first
+      // Put tasks with due dates BEFORE tasks without due dates
+      if (a.dueDate) return -1;
       if (b.dueDate) return 1;
 
       // 2. Priority check (for tasks without date or same date)

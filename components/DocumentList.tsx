@@ -13,10 +13,8 @@ type FilterType = 'ALL' | 'PENDING' | 'REMINDER';
 export const DocumentList: React.FC<DocumentListProps> = ({ documents, onUpdateStatus }) => {
   const [filter, setFilter] = useState<FilterType>('ALL');
 
-  // Sort: Overdue first, then by deadline
+  // Sort: Strictly by deadline (Nearest/Past -> Farthest/Future)
   const sortedDocs = [...documents].sort((a, b) => {
-    if (a.status === DocumentStatus.OVERDUE && b.status !== DocumentStatus.OVERDUE) return -1;
-    if (a.status !== DocumentStatus.OVERDUE && b.status === DocumentStatus.OVERDUE) return 1;
     return new Date(a.deadline).getTime() - new Date(b.deadline).getTime();
   });
 
@@ -26,7 +24,19 @@ export const DocumentList: React.FC<DocumentListProps> = ({ documents, onUpdateS
         return doc.status === DocumentStatus.PENDING || doc.status === DocumentStatus.IN_PROGRESS;
     }
     if (filter === 'REMINDER') {
-        return doc.priority === Priority.URGENT || doc.status === DocumentStatus.OVERDUE;
+        // Show urgent priority OR overdue items OR items due soon (within 3 days)
+        const isUrgent = doc.priority === Priority.URGENT;
+        const isOverdue = doc.status === DocumentStatus.OVERDUE;
+        
+        // Check if due within next 3 days
+        const today = new Date();
+        today.setHours(0,0,0,0);
+        const deadline = new Date(doc.deadline);
+        const diffTime = deadline.getTime() - today.getTime();
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        const isDueSoon = diffDays >= 0 && diffDays <= 3;
+
+        return isUrgent || isOverdue || isDueSoon;
     }
     return true;
   });
