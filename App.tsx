@@ -5,7 +5,7 @@ import { Calendar } from './components/Calendar';
 import { TaskList } from './components/TaskList';
 import { DocumentList } from './components/DocumentList';
 import { SmartAddModal } from './components/SmartAddModal';
-import { LayoutDashboard, Calendar as CalIcon, CheckSquare, Plus, Bell, FileText } from 'lucide-react';
+import { LayoutDashboard, Calendar as CalIcon, CheckSquare, Plus, Bell, FileText, ChevronRight } from 'lucide-react';
 
 // Simple ID generator for this environment
 const generateId = () => Math.random().toString(36).substr(2, 9);
@@ -129,78 +129,92 @@ export default function App() {
     setView(ViewMode.CALENDAR_WEEK);
   };
 
-  const NavItem = ({ mode, icon: Icon, label }: { mode: ViewMode, icon: any, label: string }) => (
-    <button
-      onClick={() => setView(mode)}
-      className={`flex items-center gap-3 w-full px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
-        view === mode 
-          ? 'bg-indigo-50 text-indigo-700' 
-          : 'text-slate-600 hover:bg-slate-50'
-      }`}
-    >
-      <Icon className="w-5 h-5" />
-      {label}
-    </button>
-  );
+  const NavItem = ({ mode, icon: Icon, label }: { mode: ViewMode, icon: any, label: string }) => {
+    const isActive = view === mode;
+    return (
+      <button
+        onClick={() => setView(mode)}
+        className={`group relative flex items-center gap-3 w-full px-4 py-3.5 rounded-xl text-sm font-medium transition-all duration-200 ease-in-out ${
+          isActive 
+            ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' 
+            : 'text-slate-500 hover:bg-white hover:text-indigo-600 hover:shadow-sm'
+        }`}
+      >
+        <Icon className={`w-5 h-5 transition-transform duration-200 ${isActive ? 'scale-110' : 'group-hover:scale-110'}`} />
+        <span className="flex-1 text-left">{label}</span>
+        {isActive && <ChevronRight className="w-4 h-4 opacity-80" />}
+      </button>
+    );
+  };
 
   return (
-    <div className="min-h-screen flex bg-gray-50">
+    <div className="min-h-screen flex bg-[#f8fafc]">
       {/* Sidebar */}
-      <aside className="w-64 bg-white border-r border-gray-200 fixed inset-y-0 left-0 z-10 flex flex-col shadow-sm">
-        <div className="p-6 border-b border-gray-100 flex items-center gap-3">
-          <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center">
-            <span className="text-white font-bold text-lg">L</span>
+      <aside className="w-72 bg-[#f1f5f9] border-r border-slate-200 fixed inset-y-0 left-0 z-10 flex flex-col">
+        <div className="p-8 pb-6">
+          <div className="flex items-center gap-3 mb-8">
+            <div className="w-10 h-10 bg-gradient-to-br from-indigo-600 to-violet-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-200">
+              <span className="text-white font-bold text-xl">L</span>
+            </div>
+            <div>
+              <span className="font-bold text-xl text-slate-800 block leading-none">LeaderFlow</span>
+              <span className="text-xs text-slate-500 font-medium tracking-wide">EXECUTIVE SUITE</span>
+            </div>
           </div>
-          <span className="font-bold text-xl text-gray-800">LeaderFlow</span>
+
+          <div className="space-y-1.5">
+            <NavItem mode={ViewMode.DASHBOARD} icon={LayoutDashboard} label="Tổng quan" />
+            <NavItem mode={ViewMode.CALENDAR_WEEK} icon={CalIcon} label="Lịch công tác" />
+            <NavItem mode={ViewMode.TASKS} icon={CheckSquare} label="Nhắc việc" />
+            <NavItem mode={ViewMode.DOCUMENTS} icon={FileText} label="Văn bản & Báo cáo" />
+          </div>
         </div>
 
-        <div className="p-4 space-y-1 flex-1">
-          <NavItem mode={ViewMode.DASHBOARD} icon={LayoutDashboard} label="Tổng quan" />
-          <NavItem mode={ViewMode.CALENDAR_WEEK} icon={CalIcon} label="Lịch công tác" />
-          <NavItem mode={ViewMode.TASKS} icon={CheckSquare} label="Nhắc việc" />
-          <NavItem mode={ViewMode.DOCUMENTS} icon={FileText} label="Văn bản & Báo cáo" />
-        </div>
+        <div className="mt-auto p-6">
+          <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm mb-6">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 font-bold border border-slate-200">
+                GD
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold text-slate-800 truncate">Nguyễn Văn A</p>
+                <p className="text-xs text-slate-500 truncate">Giám đốc điều hành</p>
+              </div>
+            </div>
+          </div>
 
-        <div className="p-4 border-t border-gray-100">
           <button 
             onClick={() => setShowSmartAdd(true)}
-            className="w-full bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white rounded-lg px-4 py-3 font-medium shadow-md transition-all flex items-center justify-center gap-2"
+            className="w-full group bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white rounded-xl px-4 py-3.5 font-medium shadow-md hover:shadow-xl hover:shadow-indigo-200 transition-all duration-200 flex items-center justify-center gap-2 transform hover:-translate-y-0.5"
           >
-            <Plus className="w-5 h-5" />
-            Tạo mới
+            <Plus className="w-5 h-5 bg-white/20 rounded-full p-0.5" />
+            <span>Tạo mới</span>
           </button>
         </div>
       </aside>
 
       {/* Main Content */}
-      <main className="ml-64 flex-1 p-8">
+      <main className="ml-72 flex-1 p-8 overflow-y-auto">
         {/* Header */}
-        <header className="flex justify-between items-center mb-8">
+        <header className="flex justify-between items-end mb-8 pb-4 border-b border-slate-200/60">
           <div>
-             <h1 className="text-2xl font-bold text-gray-900">
+             <h1 className="text-3xl font-bold text-slate-800 tracking-tight">
               {view === ViewMode.DASHBOARD && 'Bảng điều khiển'}
-              {view === ViewMode.CALENDAR_WEEK && 'Lịch làm việc'}
-              {view === ViewMode.TASKS && 'Danh sách công việc'}
-              {view === ViewMode.DOCUMENTS && 'Quản lý văn bản & Báo cáo'}
+              {view === ViewMode.CALENDAR_WEEK && 'Lịch công tác'}
+              {view === ViewMode.TASKS && 'Danh sách nhắc việc'}
+              {view === ViewMode.DOCUMENTS && 'Quản lý văn bản'}
              </h1>
-             <p className="text-gray-500 text-sm mt-1">Quản lý hiệu quả, lãnh đạo thành công</p>
+             <p className="text-slate-500 mt-2 font-medium">
+               Chào buổi sáng, chúc Lãnh đạo một ngày làm việc hiệu quả.
+             </p>
           </div>
           <div className="flex items-center gap-4">
-             <button className="p-2 text-gray-400 hover:text-indigo-600 transition-colors relative">
+             <button className="p-2.5 text-slate-400 hover:text-indigo-600 hover:bg-white rounded-full transition-all relative">
                <Bell className="w-6 h-6" />
                {(tasks.some(t => t.priority === Priority.URGENT) || documents.some(d => d.status === DocumentStatus.OVERDUE)) && (
-                 <span className="absolute top-1.5 right-2 w-2 h-2 bg-red-500 rounded-full border border-white"></span>
+                 <span className="absolute top-2 right-2.5 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white"></span>
                )}
              </button>
-             <div className="flex items-center gap-3 pl-4 border-l border-gray-200">
-                <div className="w-10 h-10 rounded-full bg-indigo-100 border border-indigo-200 flex items-center justify-center text-indigo-700 font-bold">
-                  GD
-                </div>
-                <div className="hidden md:block">
-                  <p className="text-sm font-medium text-gray-900">Giám đốc</p>
-                  <p className="text-xs text-gray-500">ceo@company.com</p>
-                </div>
-             </div>
           </div>
         </header>
 
