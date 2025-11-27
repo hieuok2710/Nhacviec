@@ -1,17 +1,35 @@
 import React, { useState } from 'react';
 import { Document, DocumentStatus, Priority } from '../types';
 import { formatDate, getDocumentStatusColor, getPriorityColor } from '../utils';
-import { FileText, AlertTriangle, CheckCircle, Clock, ArrowRight, Bell } from 'lucide-react';
+import { FileText, AlertTriangle, CheckCircle, Clock, ArrowRight, Bell, Plus, X, Save, Upload, Paperclip } from 'lucide-react';
 
 interface DocumentListProps {
   documents: Document[];
   onUpdateStatus: (id: string, newStatus: DocumentStatus) => void;
+  onAddDocument: (doc: Partial<Document>) => void;
 }
 
 type FilterType = 'ALL' | 'PENDING' | 'REMINDER';
 
-export const DocumentList: React.FC<DocumentListProps> = ({ documents, onUpdateStatus }) => {
+export const DocumentList: React.FC<DocumentListProps> = ({ documents, onUpdateStatus, onAddDocument }) => {
   const [filter, setFilter] = useState<FilterType>('ALL');
+  const [isAdding, setIsAdding] = useState(false);
+  const [fileName, setFileName] = useState('');
+  const [newDoc, setNewDoc] = useState<{
+    code: string;
+    title: string;
+    submitter: string;
+    deadline: string;
+    priority: Priority;
+    attachmentUrl?: string;
+  }>({
+    code: '',
+    title: '',
+    submitter: '',
+    deadline: '',
+    priority: Priority.NORMAL,
+    attachmentUrl: undefined
+  });
 
   // Sort: Strictly by deadline (Nearest/Past -> Farthest/Future)
   const sortedDocs = [...documents].sort((a, b) => {
@@ -40,6 +58,42 @@ export const DocumentList: React.FC<DocumentListProps> = ({ documents, onUpdateS
     }
     return true;
   });
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setFileName(file.name);
+      // Create a fake URL for the uploaded file to simulate attachment
+      const url = URL.createObjectURL(file);
+      setNewDoc({ ...newDoc, attachmentUrl: url });
+    }
+  };
+
+  const handleCreate = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newDoc.title.trim()) return;
+
+    onAddDocument({
+        code: newDoc.code || 'Chưa có số',
+        title: newDoc.title,
+        submitter: newDoc.submitter || 'Đang cập nhật',
+        deadline: newDoc.deadline ? new Date(newDoc.deadline) : undefined,
+        priority: newDoc.priority,
+        attachmentUrl: newDoc.attachmentUrl
+    });
+
+    // Reset and close
+    setNewDoc({
+        code: '',
+        title: '',
+        submitter: '',
+        deadline: '',
+        priority: Priority.NORMAL,
+        attachmentUrl: undefined
+    });
+    setFileName('');
+    setIsAdding(false);
+  };
 
   return (
     <div className="space-y-6">
@@ -91,13 +145,131 @@ export const DocumentList: React.FC<DocumentListProps> = ({ documents, onUpdateS
         </div>
       </div>
 
+      {/* Add Document Form */}
+      {isAdding && (
+          <div className="bg-white rounded-xl border border-indigo-200 shadow-lg p-6 animate-in fade-in slide-in-from-top-4 duration-200">
+             <div className="flex justify-between items-center mb-4">
+                 <h3 className="font-bold text-lg text-indigo-700 flex items-center gap-2">
+                     <Plus className="w-5 h-5" /> Thêm văn bản mới
+                 </h3>
+                 <button onClick={() => setIsAdding(false)} className="text-gray-400 hover:text-gray-600">
+                     <X className="w-5 h-5" />
+                 </button>
+             </div>
+             <form onSubmit={handleCreate}>
+                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                     <div>
+                         <label className="block text-xs font-medium text-gray-500 mb-1">Số ký hiệu</label>
+                         <input 
+                             type="text" 
+                             placeholder="VD: 123/BC-UBND"
+                             className="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                             value={newDoc.code}
+                             onChange={(e) => setNewDoc({...newDoc, code: e.target.value})}
+                         />
+                     </div>
+                     <div>
+                         <label className="block text-xs font-medium text-gray-500 mb-1">Đơn vị trình</label>
+                         <input 
+                             type="text" 
+                             placeholder="VD: Phòng Tài chính"
+                             className="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                             value={newDoc.submitter}
+                             onChange={(e) => setNewDoc({...newDoc, submitter: e.target.value})}
+                         />
+                     </div>
+                     <div>
+                         <label className="block text-xs font-medium text-gray-500 mb-1">Độ khẩn</label>
+                         <select 
+                             className="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                             value={newDoc.priority}
+                             onChange={(e) => setNewDoc({...newDoc, priority: e.target.value as Priority})}
+                         >
+                             {Object.values(Priority).map(p => <option key={p} value={p}>{p}</option>)}
+                         </select>
+                     </div>
+                     <div>
+                         <label className="block text-xs font-medium text-gray-500 mb-1">Hạn xử lý</label>
+                         <input 
+                             type="date" 
+                             className="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                             value={newDoc.deadline}
+                             onChange={(e) => setNewDoc({...newDoc, deadline: e.target.value})}
+                         />
+                     </div>
+                 </div>
+                 
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div className="md:col-span-2">
+                        <label className="block text-xs font-medium text-gray-500 mb-1">Trích yếu nội dung *</label>
+                        <textarea 
+                            rows={2}
+                            placeholder="Nhập nội dung văn bản..."
+                            className="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none resize-none"
+                            value={newDoc.title}
+                            onChange={(e) => setNewDoc({...newDoc, title: e.target.value})}
+                            required
+                        />
+                    </div>
+                    <div className="md:col-span-2">
+                        <label className="block text-xs font-medium text-gray-500 mb-1">Tệp đính kèm (PC)</label>
+                        <div className="flex items-center gap-3">
+                            <label className="cursor-pointer bg-white border border-gray-300 border-dashed rounded-lg px-4 py-2 hover:bg-gray-50 transition-colors flex items-center gap-2 text-sm text-gray-700 w-fit">
+                                <Upload className="w-4 h-4 text-gray-500" />
+                                {fileName || "Chọn tệp từ máy tính..."}
+                                <input type="file" className="hidden" onChange={handleFileChange} />
+                            </label>
+                            {fileName && (
+                                <button 
+                                    type="button" 
+                                    onClick={() => { setFileName(''); setNewDoc({...newDoc, attachmentUrl: undefined}); }}
+                                    className="p-1 text-gray-400 hover:text-red-500 transition-colors"
+                                    title="Xóa tệp"
+                                >
+                                    <X className="w-4 h-4" />
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                 </div>
+
+                 <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
+                     <button 
+                         type="button" 
+                         onClick={() => setIsAdding(false)}
+                         className="px-4 py-2 text-sm text-gray-600 font-medium hover:bg-gray-100 rounded-lg transition-colors"
+                     >
+                         Hủy bỏ
+                     </button>
+                     <button 
+                         type="submit" 
+                         className="px-4 py-2 text-sm bg-indigo-600 text-white font-medium hover:bg-indigo-700 rounded-lg transition-colors flex items-center gap-1.5"
+                     >
+                         <Save className="w-4 h-4" /> Lưu văn bản
+                     </button>
+                 </div>
+             </form>
+          </div>
+      )}
+
       {/* Main List */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
         <div className="p-6 border-b border-gray-100 flex flex-col sm:flex-row justify-between items-center gap-4">
-          <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
-            <FileText className="w-5 h-5 text-indigo-600" />
-            Danh sách văn bản toàn đơn vị
-          </h2>
+          <div className="flex items-center gap-3">
+              <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                <FileText className="w-5 h-5 text-indigo-600" />
+                Danh sách văn bản
+              </h2>
+              {!isAdding && (
+                  <button 
+                    onClick={() => setIsAdding(true)}
+                    className="flex items-center gap-1 px-3 py-1.5 bg-indigo-50 text-indigo-700 text-xs font-bold rounded-lg hover:bg-indigo-100 transition-colors border border-indigo-100"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    Thêm mới
+                  </button>
+              )}
+          </div>
           <div className="flex gap-2 bg-gray-50 p-1 rounded-lg">
               <button 
                 onClick={() => setFilter('ALL')}
@@ -140,9 +312,22 @@ export const DocumentList: React.FC<DocumentListProps> = ({ documents, onUpdateS
                     {doc.code}
                   </td>
                   <td className="px-6 py-4">
-                    <p className="text-sm text-gray-800 font-medium line-clamp-2 leading-relaxed" title={doc.title}>
-                      {doc.title}
-                    </p>
+                    <div className="flex flex-col gap-1">
+                        <p className="text-sm text-gray-800 font-medium line-clamp-2 leading-relaxed" title={doc.title}>
+                        {doc.title}
+                        </p>
+                        {doc.attachmentUrl && (
+                            <a 
+                                href={doc.attachmentUrl} 
+                                target="_blank" 
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 font-medium hover:underline w-fit"
+                            >
+                                <Paperclip className="w-3 h-3" />
+                                Xem tài liệu
+                            </a>
+                        )}
+                    </div>
                   </td>
                   <td className="px-6 py-4 text-sm text-gray-600">
                     {doc.submitter}
