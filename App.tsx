@@ -5,6 +5,7 @@ import { Calendar } from './components/Calendar';
 import { TaskList } from './components/TaskList';
 import { DocumentList } from './components/DocumentList';
 import { SmartAddModal } from './components/SmartAddModal';
+import { FloatingNotifier } from './components/FloatingNotifier';
 import { LayoutDashboard, Calendar as CalIcon, CheckSquare, Plus, Bell, FileText, ChevronRight } from 'lucide-react';
 
 // Simple ID generator for this environment
@@ -106,6 +107,11 @@ export default function App() {
   const [documents, setDocuments] = useState<Document[]>(INITIAL_DOCUMENTS);
   const [showSmartAdd, setShowSmartAdd] = useState(false);
 
+  // Calculate Notification Counts
+  const urgentTaskCount = tasks.filter(t => !t.completed && (t.priority === Priority.URGENT || t.priority === Priority.HIGH)).length;
+  const pendingDocCount = documents.filter(d => d.status === DocumentStatus.PENDING || d.status === DocumentStatus.OVERDUE).length;
+  const totalNotifications = urgentTaskCount + pendingDocCount;
+
   const handleTaskToggle = (id: string) => {
     setTasks(prev => prev.map(t => t.id === id ? { ...t, completed: !t.completed } : t));
   };
@@ -125,11 +131,22 @@ export default function App() {
       location: eventData.location
     };
     setEvents(prev => [...prev, newEvent]);
-    // Optional: Switch to calendar to see it
     setView(ViewMode.CALENDAR_WEEK);
   };
+  
+  const handleAddTask = (taskData: Partial<Task>) => {
+      const newTask: Task = {
+          id: generateId(),
+          title: taskData.title || 'Việc cần làm mới',
+          priority: taskData.priority || Priority.NORMAL,
+          completed: false,
+          dueDate: taskData.dueDate,
+          assignee: taskData.assignee
+      };
+      setTasks(prev => [...prev, newTask]);
+  };
 
-  const NavItem = ({ mode, icon: Icon, label }: { mode: ViewMode, icon: any, label: string }) => {
+  const NavItem = ({ mode, icon: Icon, label, badgeCount }: { mode: ViewMode, icon: any, label: string, badgeCount?: number }) => {
     const isActive = view === mode;
     return (
       <button
@@ -142,7 +159,17 @@ export default function App() {
       >
         <Icon className={`w-5 h-5 transition-transform duration-200 ${isActive ? 'scale-110' : 'group-hover:scale-110'}`} />
         <span className="flex-1 text-left">{label}</span>
-        {isActive && <ChevronRight className="w-4 h-4 opacity-80" />}
+        
+        {/* Menu Badge */}
+        {badgeCount !== undefined && badgeCount > 0 && (
+          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold shadow-sm ${
+            isActive ? 'bg-white text-indigo-600' : 'bg-red-500 text-white'
+          }`}>
+            {badgeCount}
+          </span>
+        )}
+        
+        {isActive && !badgeCount && <ChevronRight className="w-4 h-4 opacity-80" />}
       </button>
     );
   };
@@ -165,8 +192,8 @@ export default function App() {
           <div className="space-y-1.5">
             <NavItem mode={ViewMode.DASHBOARD} icon={LayoutDashboard} label="Tổng quan" />
             <NavItem mode={ViewMode.CALENDAR_WEEK} icon={CalIcon} label="Lịch công tác" />
-            <NavItem mode={ViewMode.TASKS} icon={CheckSquare} label="Nhắc việc" />
-            <NavItem mode={ViewMode.DOCUMENTS} icon={FileText} label="Văn bản & Báo cáo" />
+            <NavItem mode={ViewMode.TASKS} icon={CheckSquare} label="Nhắc việc" badgeCount={urgentTaskCount} />
+            <NavItem mode={ViewMode.DOCUMENTS} icon={FileText} label="Văn bản & Báo cáo" badgeCount={pendingDocCount} />
           </div>
         </div>
 
@@ -211,8 +238,8 @@ export default function App() {
           <div className="flex items-center gap-4">
              <button className="p-2.5 text-slate-400 hover:text-indigo-600 hover:bg-white rounded-full transition-all relative">
                <Bell className="w-6 h-6" />
-               {(tasks.some(t => t.priority === Priority.URGENT) || documents.some(d => d.status === DocumentStatus.OVERDUE)) && (
-                 <span className="absolute top-2 right-2.5 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white"></span>
+               {totalNotifications > 0 && (
+                 <span className="absolute top-2 right-2.5 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white animate-pulse"></span>
                )}
              </button>
           </div>
@@ -233,13 +260,21 @@ export default function App() {
             <Calendar events={events} mode={view} />
           )}
           {view === ViewMode.TASKS && (
-            <TaskList tasks={tasks} onToggle={handleTaskToggle} />
+            <TaskList tasks={tasks} onToggle={handleTaskToggle} onAddTask={handleAddTask} />
           )}
           {view === ViewMode.DOCUMENTS && (
             <DocumentList documents={documents} onUpdateStatus={handleDocumentStatusUpdate} />
           )}
         </div>
       </main>
+
+      {/* Floating Notifier */}
+      <FloatingNotifier 
+        tasks={tasks} 
+        documents={documents} 
+        onViewTask={(id) => setView(ViewMode.TASKS)}
+        onViewDocument={(id) => setView(ViewMode.DOCUMENTS)}
+      />
 
       {/* Smart Add Modal */}
       {showSmartAdd && (

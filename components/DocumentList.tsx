@@ -1,19 +1,34 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Document, DocumentStatus, Priority } from '../types';
 import { formatDate, getDocumentStatusColor, getPriorityColor } from '../utils';
-import { FileText, AlertTriangle, CheckCircle, Clock, ArrowRight } from 'lucide-react';
+import { FileText, AlertTriangle, CheckCircle, Clock, ArrowRight, Bell } from 'lucide-react';
 
 interface DocumentListProps {
   documents: Document[];
   onUpdateStatus: (id: string, newStatus: DocumentStatus) => void;
 }
 
+type FilterType = 'ALL' | 'PENDING' | 'REMINDER';
+
 export const DocumentList: React.FC<DocumentListProps> = ({ documents, onUpdateStatus }) => {
+  const [filter, setFilter] = useState<FilterType>('ALL');
+
   // Sort: Overdue first, then by deadline
   const sortedDocs = [...documents].sort((a, b) => {
     if (a.status === DocumentStatus.OVERDUE && b.status !== DocumentStatus.OVERDUE) return -1;
     if (a.status !== DocumentStatus.OVERDUE && b.status === DocumentStatus.OVERDUE) return 1;
     return new Date(a.deadline).getTime() - new Date(b.deadline).getTime();
+  });
+
+  // Filter Logic
+  const displayDocs = sortedDocs.filter(doc => {
+    if (filter === 'PENDING') {
+        return doc.status === DocumentStatus.PENDING || doc.status === DocumentStatus.IN_PROGRESS;
+    }
+    if (filter === 'REMINDER') {
+        return doc.priority === Priority.URGENT || doc.status === DocumentStatus.OVERDUE;
+    }
+    return true;
   });
 
   return (
@@ -68,14 +83,31 @@ export const DocumentList: React.FC<DocumentListProps> = ({ documents, onUpdateS
 
       {/* Main List */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-        <div className="p-6 border-b border-gray-100 flex justify-between items-center">
+        <div className="p-6 border-b border-gray-100 flex flex-col sm:flex-row justify-between items-center gap-4">
           <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
             <FileText className="w-5 h-5 text-indigo-600" />
             Danh sách văn bản toàn đơn vị
           </h2>
-          <div className="flex gap-2">
-              <span className="px-3 py-1 rounded-full bg-gray-100 text-xs font-medium text-gray-600 cursor-pointer hover:bg-gray-200">Tất cả</span>
-              <span className="px-3 py-1 rounded-full bg-white border border-gray-200 text-xs font-medium text-gray-600 cursor-pointer hover:border-indigo-500 hover:text-indigo-600">Chờ ký</span>
+          <div className="flex gap-2 bg-gray-50 p-1 rounded-lg">
+              <button 
+                onClick={() => setFilter('ALL')}
+                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${filter === 'ALL' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:bg-gray-200'}`}
+              >
+                Tất cả
+              </button>
+              <button 
+                onClick={() => setFilter('PENDING')}
+                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${filter === 'PENDING' ? 'bg-white text-amber-600 shadow-sm' : 'text-gray-500 hover:bg-gray-200'}`}
+              >
+                Chờ ký
+              </button>
+              <button 
+                onClick={() => setFilter('REMINDER')}
+                className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 ${filter === 'REMINDER' ? 'bg-red-50 text-red-600 shadow-sm ring-1 ring-red-100' : 'text-gray-500 hover:bg-red-50 hover:text-red-500'}`}
+              >
+                <Bell className="w-3 h-3" />
+                Cần nhắc
+              </button>
           </div>
         </div>
         <div className="overflow-x-auto">
@@ -92,7 +124,7 @@ export const DocumentList: React.FC<DocumentListProps> = ({ documents, onUpdateS
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {sortedDocs.map((doc) => (
+              {displayDocs.map((doc) => (
                 <tr key={doc.id} className="hover:bg-slate-50 transition-colors group">
                   <td className="px-6 py-4 font-semibold text-indigo-900 whitespace-nowrap">
                     {doc.code}
@@ -135,12 +167,12 @@ export const DocumentList: React.FC<DocumentListProps> = ({ documents, onUpdateS
                   </td>
                 </tr>
               ))}
-              {sortedDocs.length === 0 && (
+              {displayDocs.length === 0 && (
                 <tr>
                     <td colSpan={7} className="px-6 py-12 text-center">
                         <div className="flex flex-col items-center justify-center text-gray-400">
                             <FileText className="w-12 h-12 mb-3 opacity-20" />
-                            <p>Không có văn bản nào cần xử lý.</p>
+                            <p>Không tìm thấy văn bản nào trong mục này.</p>
                         </div>
                     </td>
                 </tr>
