@@ -1,7 +1,7 @@
 import React from 'react';
 import { CalendarEvent, Task, Priority, Document, DocumentStatus } from '../types';
 import { formatDate, formatTime, getPriorityColor, getEventTypeColor, getDocumentStatusColor, getRelativeTimeLabel, isOverdue } from '../utils';
-import { CheckCircle2, Clock, AlertCircle, FileText, ArrowRight, Briefcase } from 'lucide-react';
+import { CheckCircle2, Clock, AlertCircle, FileText, ArrowRight, Briefcase, AlertTriangle } from 'lucide-react';
 
 interface DashboardProps {
   events: CalendarEvent[];
@@ -18,21 +18,46 @@ export const Dashboard: React.FC<DashboardProps> = ({ events, tasks, documents, 
     new Date(e.start).toDateString() === today.toDateString()
   ).sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
   
+  // Filter Urgent & Overdue Tasks
   const urgentTasks = tasks
-    .filter(t => !t.completed && (t.priority === Priority.URGENT || t.priority === Priority.HIGH))
+    .filter(t => !t.completed && (
+        t.priority === Priority.URGENT || 
+        t.priority === Priority.HIGH ||
+        (t.dueDate && isOverdue(new Date(t.dueDate)))
+    ))
     .sort((a, b) => {
-      // Sort by Due Date (Nearest first), then items without date
+      // Sort by Overdue first
+      const aOver = a.dueDate && isOverdue(new Date(a.dueDate)) ? 1 : 0;
+      const bOver = b.dueDate && isOverdue(new Date(b.dueDate)) ? 1 : 0;
+      if (aOver !== bOver) return bOver - aOver;
+
+      // Then by Priority
+      const pScore = { [Priority.URGENT]: 3, [Priority.HIGH]: 2, [Priority.NORMAL]: 1, [Priority.LOW]: 0 };
+      const pDiff = pScore[b.priority] - pScore[a.priority];
+      if (pDiff !== 0) return pDiff;
+
+      // Then by Date
       if (a.dueDate && b.dueDate) return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
-      if (a.dueDate) return -1;
-      if (b.dueDate) return 1;
       return 0;
     });
   
-  // Filter pending documents sorted by deadline
+  // Filter pending documents sorted by deadline (Overdue first)
   const pendingDocs = documents
     .filter(d => d.status === DocumentStatus.PENDING || d.status === DocumentStatus.IN_PROGRESS || d.status === DocumentStatus.OVERDUE)
-    .sort((a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime())
+    .sort((a, b) => {
+        // Sort Overdue first
+        const aOver = a.status === DocumentStatus.OVERDUE ? 1 : 0;
+        const bOver = b.status === DocumentStatus.OVERDUE ? 1 : 0;
+        if (aOver !== bOver) return bOver - aOver;
+        
+        return new Date(a.deadline).getTime() - new Date(b.deadline).getTime();
+    })
     .slice(0, 3); // Show top 3
+
+  // Calculate total overdue items for stats
+  const overdueTasksCount = tasks.filter(t => !t.completed && t.dueDate && isOverdue(new Date(t.dueDate))).length;
+  const overdueDocsCount = documents.filter(d => d.status === DocumentStatus.OVERDUE).length;
+  const totalOverdue = overdueTasksCount + overdueDocsCount;
 
   return (
     <div className="space-y-6">
@@ -45,7 +70,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ events, tasks, documents, 
           <h1 className="text-3xl font-bold mb-2">Xin chào, Lãnh đạo</h1>
           <p className="text-indigo-100 text-lg mb-6">{formatDate(today)}</p>
           
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="bg-white/10 backdrop-blur-sm rounded-lg p-3 border border-white/20">
               <p className="text-xs text-indigo-200 uppercase tracking-wider font-semibold">Sự kiện hôm nay</p>
               <p className="text-2xl font-bold">{todayEvents.length}</p>
@@ -58,6 +83,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ events, tasks, documents, 
               <p className="text-xs text-indigo-200 uppercase tracking-wider font-semibold">Văn bản chờ xử lý</p>
               <p className="text-2xl font-bold">{pendingDocs.length}</p>
             </div>
+            {totalOverdue > 0 && (
+                <div className="bg-red-500/20 backdrop-blur-sm rounded-lg p-3 border border-red-200/40 animate-pulse">
+                    <p className="text-xs text-red-100 uppercase tracking-wider font-bold flex items-center gap-1">
+                        <AlertTriangle className="w-3.5 h-3.5" /> Quá hạn
+                    </p>
+                    <p className="text-2xl font-bold text-white">{totalOverdue}</p>
+                </div>
+            )}
           </div>
         </div>
       </div>
@@ -130,19 +163,22 @@ export const Dashboard: React.FC<DashboardProps> = ({ events, tasks, documents, 
               {pendingDocs.length === 0 ? (
                  <div className="text-center py-4 text-sm text-gray-500">Không có văn bản gấp.</div>
               ) : (
-                pendingDocs.map(doc => (
-                  <div key={doc.id} className="p-3 bg-amber-50 rounded-lg border border-amber-100">
-                    <div className="flex justify-between items-start mb-1">
-                        <span className="text-xs font-bold text-amber-800 bg-amber-100 px-1.5 py-0.5 rounded">{doc.code}</span>
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded border ${getDocumentStatusColor(doc.status)}`}>{doc.status}</span>
+                pendingDocs.map(doc => {
+                  const isDocOverdue = doc.status === DocumentStatus.OVERDUE;
+                  return (
+                    <div key={doc.id} className={`p-3 rounded-lg border transition-colors ${isDocOverdue ? 'bg-red-50 border-red-200' : 'bg-amber-50 border-amber-100'}`}>
+                      <div className="flex justify-between items-start mb-1">
+                          <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${isDocOverdue ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800'}`}>{doc.code}</span>
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded border ${getDocumentStatusColor(doc.status)}`}>{doc.status}</span>
+                      </div>
+                      <p className={`text-sm font-medium line-clamp-2 leading-snug ${isDocOverdue ? 'text-red-900' : 'text-gray-800'}`} title={doc.title}>{doc.title}</p>
+                      <div className={`mt-2 text-xs flex items-center gap-1 ${isDocOverdue ? 'text-red-600 font-bold' : 'text-amber-700'}`}>
+                          <Clock className="w-3 h-3" />
+                          Hạn: {formatDate(new Date(doc.deadline))}
+                      </div>
                     </div>
-                    <p className="text-sm text-gray-800 font-medium line-clamp-2 leading-snug" title={doc.title}>{doc.title}</p>
-                    <div className="mt-2 text-xs text-amber-700 flex items-center gap-1">
-                        <Clock className="w-3 h-3" />
-                        Hạn: {formatDate(new Date(doc.deadline))}
-                    </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           </div>
@@ -152,7 +188,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ events, tasks, documents, 
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
                 <AlertCircle className="w-5 h-5 text-red-600" />
-                Việc gấp
+                Việc gấp & Quá hạn
               </h2>
             </div>
 
@@ -163,24 +199,24 @@ export const Dashboard: React.FC<DashboardProps> = ({ events, tasks, documents, 
                   <p>Đã xử lý hết việc quan trọng</p>
                 </div>
               ) : (
-                urgentTasks.map(task => {
+                urgentTasks.slice(0, 5).map(task => { // Limit to 5 tasks
                   const overdue = task.dueDate && isOverdue(new Date(task.dueDate));
                   return (
-                    <div key={task.id} className="flex items-start gap-3 p-3 rounded-lg border border-gray-100 hover:bg-gray-50 transition-colors">
+                    <div key={task.id} className={`flex items-start gap-3 p-3 rounded-lg border transition-colors ${overdue ? 'bg-red-50 border-red-200' : 'border-gray-100 hover:bg-gray-50'}`}>
                       <button 
                         onClick={() => onTaskToggle(task.id)}
-                        className="mt-0.5 w-4 h-4 rounded border-2 border-gray-300 flex items-center justify-center text-transparent hover:border-blue-500 focus:outline-none"
+                        className={`mt-0.5 w-4 h-4 rounded border-2 flex items-center justify-center text-transparent focus:outline-none ${overdue ? 'border-red-300 hover:border-red-500' : 'border-gray-300 hover:border-blue-500'}`}
                       >
                         <div className="w-2 h-2 rounded-sm bg-blue-500 opacity-0 scale-0 transition-all" />
                       </button>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-800 leading-snug truncate">{task.title}</p>
+                        <p className={`text-sm font-medium leading-snug truncate ${overdue ? 'text-red-800' : 'text-gray-800'}`}>{task.title}</p>
                         <div className="flex items-center gap-2 mt-1">
-                          <span className={`text-[10px] px-1.5 py-0.5 rounded border ${getPriorityColor(task.priority)}`}>
-                            {task.priority}
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded border ${overdue ? 'bg-red-100 text-red-700 border-red-200' : getPriorityColor(task.priority)}`}>
+                            {overdue ? 'QUÁ HẠN' : task.priority}
                           </span>
                           {task.dueDate && (
-                            <span className={`text-[10px] ${overdue ? 'text-red-600 font-medium' : 'text-gray-500'}`}>
+                            <span className={`text-[10px] ${overdue ? 'text-red-600 font-bold' : 'text-gray-500'}`}>
                               {getRelativeTimeLabel(new Date(task.dueDate))}
                             </span>
                           )}

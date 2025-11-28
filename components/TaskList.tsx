@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Task, Priority } from '../types';
-import { getPriorityColor, formatDate, getRelativeTimeLabel, isOverdue } from '../utils';
-import { CheckSquare, Square, Clock, Plus, X, Calendar, User } from 'lucide-react';
+import { getPriorityColor, getRelativeTimeLabel, isOverdue } from '../utils';
+import { CheckSquare, Square, Clock, Plus, Calendar, User, CornerDownLeft } from 'lucide-react';
 
 interface TaskListProps {
   tasks: Task[];
@@ -53,6 +53,7 @@ const TaskItem: React.FC<TaskItemProps> = ({ task, onToggle }) => {
 
 export const TaskList: React.FC<TaskListProps> = ({ tasks, onToggle, onAddTask }) => {
   const [isAdding, setIsAdding] = useState(false);
+  // Detailed add form state
   const [newTask, setNewTask] = useState<{
     title: string;
     priority: Priority;
@@ -64,6 +65,9 @@ export const TaskList: React.FC<TaskListProps> = ({ tasks, onToggle, onAddTask }
     dueDate: '',
     assignee: ''
   });
+
+  // Quick add input state
+  const [quickTitle, setQuickTitle] = useState('');
 
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
@@ -79,6 +83,18 @@ export const TaskList: React.FC<TaskListProps> = ({ tasks, onToggle, onAddTask }
     // Reset and close
     setNewTask({ title: '', priority: Priority.NORMAL, dueDate: '', assignee: '' });
     setIsAdding(false);
+  };
+
+  const handleQuickSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!quickTitle.trim()) return;
+
+    onAddTask({
+        title: quickTitle,
+        priority: Priority.NORMAL,
+        completed: false
+    });
+    setQuickTitle('');
   };
 
   // Sort tasks: Due Date (Nearest to Farthest) -> Priority
@@ -103,7 +119,7 @@ export const TaskList: React.FC<TaskListProps> = ({ tasks, onToggle, onAddTask }
   return (
     <div className="max-w-4xl mx-auto space-y-8">
       <div>
-        <div className="flex justify-between items-center mb-4">
+        <div className="flex justify-between items-center mb-6">
             <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
                 <Square className="w-5 h-5" />
                 Việc cần làm ({pendingTasks.length})
@@ -114,12 +130,38 @@ export const TaskList: React.FC<TaskListProps> = ({ tasks, onToggle, onAddTask }
                     className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-indigo-700 text-sm font-medium rounded-lg hover:bg-indigo-100 transition-colors"
                 >
                     <Plus className="w-4 h-4" />
-                    Thêm việc mới
+                    Thêm chi tiết
                 </button>
             )}
         </div>
 
-        {/* Add Task Form */}
+        {/* Quick Add Input */}
+        {!isAdding && (
+            <div className="mb-8 relative group">
+                <form onSubmit={handleQuickSubmit} className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                        <Plus className="h-5 w-5 text-gray-400 group-focus-within:text-indigo-500 transition-colors" />
+                    </div>
+                    <input
+                        type="text"
+                        className="block w-full pl-11 pr-14 py-4 bg-white border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 shadow-sm hover:shadow-md transition-all text-base"
+                        placeholder="Thêm nhanh việc cần làm... (Nhấn Enter)"
+                        value={quickTitle}
+                        onChange={(e) => setQuickTitle(e.target.value)}
+                    />
+                    <button 
+                        type="submit"
+                        disabled={!quickTitle.trim()}
+                        className="absolute inset-y-2 right-2 px-3 flex items-center justify-center bg-gray-50 text-gray-400 rounded-lg hover:bg-indigo-600 hover:text-white disabled:opacity-50 disabled:hover:bg-gray-50 disabled:hover:text-gray-400 transition-all"
+                        title="Thêm công việc"
+                    >
+                        <CornerDownLeft className="w-5 h-5" />
+                    </button>
+                </form>
+            </div>
+        )}
+
+        {/* Detailed Add Task Form */}
         {isAdding && (
             <div className="mb-6 p-4 bg-white rounded-xl border border-indigo-200 shadow-lg shadow-indigo-50 animate-in fade-in slide-in-from-top-2 duration-200">
                 <form onSubmit={handleCreate}>

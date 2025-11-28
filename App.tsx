@@ -6,7 +6,7 @@ import { TaskList } from './components/TaskList';
 import { DocumentList } from './components/DocumentList';
 import { SmartAddModal } from './components/SmartAddModal';
 import { FloatingNotifier } from './components/FloatingNotifier';
-import { LayoutDashboard, Calendar as CalIcon, CheckSquare, Plus, Bell, FileText, ChevronRight, Briefcase, Database, Download, Upload } from 'lucide-react';
+import { LayoutDashboard, Calendar as CalIcon, CalendarDays, CheckSquare, Plus, Bell, FileText, ChevronRight, Briefcase, Database, Download, Upload } from 'lucide-react';
 
 // Simple ID generator for this environment
 const generateId = () => Math.random().toString(36).substr(2, 9);
@@ -288,6 +288,13 @@ export default function App() {
           >
             <CalIcon className="w-5 h-5" />
             Lịch Tuần
+          </button>
+          <button 
+            onClick={() => setCurrentView(ViewMode.CALENDAR_MONTH)}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${currentView === ViewMode.CALENDAR_MONTH ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/50 font-medium' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
+          >
+            <CalendarDays className="w-5 h-5" />
+            Lịch Tháng
           </button>
           
           <div className="pt-4 pb-2 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Công việc & Văn bản</div>
