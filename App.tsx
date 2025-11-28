@@ -6,7 +6,7 @@ import { TaskList } from './components/TaskList';
 import { DocumentList } from './components/DocumentList';
 import { SmartAddModal } from './components/SmartAddModal';
 import { FloatingNotifier } from './components/FloatingNotifier';
-import { LayoutDashboard, Calendar as CalIcon, CalendarDays, CheckSquare, Plus, Bell, FileText, ChevronRight, Briefcase, Database, Download, Upload } from 'lucide-react';
+import { LayoutDashboard, Calendar as CalIcon, CalendarDays, CheckSquare, Plus, Bell, FileText, ChevronRight, Briefcase, Database, Download, Upload, ChevronDown, Settings } from 'lucide-react';
 
 // Simple ID generator for this environment
 const generateId = () => Math.random().toString(36).substr(2, 9);
@@ -94,6 +94,7 @@ const INITIAL_DOCUMENTS: Document[] = [
 export default function App() {
   const [currentView, setCurrentView] = useState<ViewMode>(ViewMode.DASHBOARD);
   const [isSmartAddOpen, setIsSmartAddOpen] = useState(false);
+  const [isSystemMenuOpen, setIsSystemMenuOpen] = useState(false); // State for collapsing system menu
   const [events, setEvents] = useState<CalendarEvent[]>(INITIAL_EVENTS);
   const [tasks, setTasks] = useState<Task[]>(INITIAL_TASKS);
   const [documents, setDocuments] = useState<Document[]>(INITIAL_DOCUMENTS);
@@ -315,31 +316,42 @@ export default function App() {
             <span className="ml-auto bg-slate-700 text-xs px-2 py-0.5 rounded-full text-slate-300">{documents.filter(d => d.status === DocumentStatus.PENDING).length}</span>
           </button>
 
-          {/* System Menu */}
-          <div className="pt-4 pb-2 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Hệ thống</div>
-          <div className="px-4 space-y-2">
-            <button 
-              onClick={handleBackup}
-              className="w-full flex items-center gap-3 px-4 py-2 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white transition-all text-sm"
-            >
-              <Download className="w-4 h-4" />
-              Sao lưu dữ liệu
-            </button>
-            <button 
-              onClick={handleRestoreClick}
-              className="w-full flex items-center gap-3 px-4 py-2 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white transition-all text-sm"
-            >
-              <Upload className="w-4 h-4" />
-              Phục hồi dữ liệu
-            </button>
-            <input 
-              type="file" 
-              ref={fileInputRef} 
-              className="hidden" 
-              accept=".json" 
-              onChange={handleFileChange}
-            />
-          </div>
+          {/* System Menu - Collapsible */}
+          <button 
+            onClick={() => setIsSystemMenuOpen(!isSystemMenuOpen)}
+            className="w-full flex items-center justify-between pt-4 pb-2 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider hover:text-slate-300 transition-colors group focus:outline-none"
+          >
+            <span className="flex items-center gap-2">
+               Hệ thống
+            </span>
+            {isSystemMenuOpen ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+          </button>
+          
+          {isSystemMenuOpen && (
+            <div className="px-4 space-y-2 animate-in slide-in-from-top-1 fade-in duration-200">
+              <button 
+                onClick={handleBackup}
+                className="w-full flex items-center gap-3 px-4 py-2 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white transition-all text-sm"
+              >
+                <Download className="w-4 h-4" />
+                Sao lưu dữ liệu
+              </button>
+              <button 
+                onClick={handleRestoreClick}
+                className="w-full flex items-center gap-3 px-4 py-2 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white transition-all text-sm"
+              >
+                <Upload className="w-4 h-4" />
+                Phục hồi dữ liệu
+              </button>
+              <input 
+                type="file" 
+                ref={fileInputRef} 
+                className="hidden" 
+                accept=".json" 
+                onChange={handleFileChange}
+              />
+            </div>
+          )}
 
         </nav>
 
@@ -349,7 +361,7 @@ export default function App() {
             className="w-full bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-400 hover:to-purple-500 text-white py-3 rounded-xl font-semibold shadow-lg shadow-indigo-900/20 transition-all flex items-center justify-center gap-2 group"
           >
             <Plus className="w-5 h-5 group-hover:rotate-90 transition-transform" />
-            Tạo sự kiện nhanh
+            Tạo mới nhanh
           </button>
         </div>
       </aside>
@@ -386,7 +398,8 @@ export default function App() {
       {isSmartAddOpen && (
         <SmartAddModal 
           onClose={() => setIsSmartAddOpen(false)} 
-          onAddEvent={handleAddEvent} 
+          onAddEvent={handleAddEvent}
+          onAddDocument={handleAddDocument}
         />
       )}
       
