@@ -1,9 +1,11 @@
+
 import React, { useState } from 'react';
-import { Task, Document, Priority, DocumentStatus } from '../types';
-import { Bell, X, AlertCircle, FileText, CheckSquare, ArrowRight, AlertTriangle } from 'lucide-react';
-import { getRelativeTimeLabel, isOverdue } from '../utils';
+import { Task, Document, Priority, DocumentStatus, CalendarEvent } from '../types';
+import { Bell, X, AlertCircle, FileText, CheckSquare, ArrowRight, AlertTriangle, Calendar, Clock } from 'lucide-react';
+import { getRelativeTimeLabel, isOverdue, formatTime } from '../utils';
 
 interface FloatingNotifierProps {
+  events?: CalendarEvent[];
   tasks: Task[];
   documents: Document[];
   onViewTask: (id: string) => void;
@@ -11,12 +13,24 @@ interface FloatingNotifierProps {
 }
 
 export const FloatingNotifier: React.FC<FloatingNotifierProps> = ({ 
+  events = [],
   tasks, 
   documents, 
   onViewTask, 
   onViewDocument 
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+
+  // Logic: Upcoming events (next 24h) that are Urgent or High
+  const now = new Date();
+  const next24h = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+  
+  const upcomingHighPriorityEvents = events.filter(e => {
+    const start = new Date(e.start);
+    const isUpcoming = start > now && start < next24h;
+    const isImportant = e.priority === Priority.URGENT || e.priority === Priority.HIGH;
+    return isUpcoming && isImportant;
+  }).sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
 
   // Logic: Include Urgent, High Priority, OR ANY Overdue task
   const urgentTasks = tasks
@@ -46,7 +60,7 @@ export const FloatingNotifier: React.FC<FloatingNotifierProps> = ({
         return new Date(a.deadline).getTime() - new Date(b.deadline).getTime();
     });
   
-  const totalCount = urgentTasks.length + urgentDocs.length;
+  const totalCount = urgentTasks.length + urgentDocs.length + upcomingHighPriorityEvents.length;
   const hasOverdue = urgentTasks.some(t => t.dueDate && isOverdue(new Date(t.dueDate))) || 
                      urgentDocs.some(d => d.status === DocumentStatus.OVERDUE);
 
@@ -60,7 +74,7 @@ export const FloatingNotifier: React.FC<FloatingNotifierProps> = ({
           <div className={`px-5 py-4 flex justify-between items-center ${hasOverdue ? 'bg-gradient-to-r from-red-600 to-rose-600' : 'bg-gradient-to-r from-indigo-600 to-violet-600'}`}>
             <h3 className="text-white font-bold flex items-center gap-2">
               {hasOverdue ? <AlertTriangle className="w-5 h-5 text-white" /> : <Bell className="w-5 h-5 text-white" />}
-              {hasOverdue ? 'Cảnh báo quá hạn' : 'Thông báo nhắc việc'} ({totalCount})
+              {hasOverdue ? 'Cảnh báo & Nhắc nhở' : 'Thông báo nhắc việc'} ({totalCount})
             </h3>
             <button 
               onClick={() => setIsOpen(false)}
@@ -71,6 +85,27 @@ export const FloatingNotifier: React.FC<FloatingNotifierProps> = ({
           </div>
 
           <div className="max-h-96 overflow-y-auto p-2 bg-slate-50/50">
+            {/* Events Section */}
+            {upcomingHighPriorityEvents.length > 0 && (
+              <div className="mb-2">
+                <p className="px-3 py-2 text-xs font-bold text-gray-500 uppercase tracking-wider">Sự kiện sắp tới ({upcomingHighPriorityEvents.length})</p>
+                {upcomingHighPriorityEvents.map(event => (
+                  <div key={event.id} className="mx-2 mb-2 p-3 rounded-xl border bg-white border-indigo-100 shadow-sm">
+                    <div className="flex justify-between items-start mb-1">
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${event.priority === Priority.URGENT ? 'bg-red-100 text-red-600 border-red-200' : 'bg-indigo-50 text-indigo-600 border-indigo-100'}`}>
+                        {event.priority === Priority.URGENT ? 'KHẨN CẤP' : 'QUAN TRỌNG'}
+                      </span>
+                      <span className="text-[10px] text-gray-500 font-medium flex items-center gap-1">
+                        <Clock className="w-3 h-3" /> {formatTime(new Date(event.start))}
+                      </span>
+                    </div>
+                    <p className="text-sm font-bold text-indigo-900 line-clamp-2 leading-snug">{event.title}</p>
+                    {event.location && <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">📍 {event.location}</p>}
+                  </div>
+                ))}
+              </div>
+            )}
+
             {/* Documents Section */}
             {urgentDocs.length > 0 && (
               <div className="mb-2">

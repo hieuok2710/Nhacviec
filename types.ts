@@ -1,3 +1,4 @@
+
 export enum EventType {
   MEETING = 'Họp',
   BUSINESS_TRIP = 'Công tác',
@@ -34,6 +35,7 @@ export interface CalendarEvent {
   start: Date;
   end: Date;
   type: EventType;
+  priority?: Priority; // Added priority field
   location?: string;
   description?: string;
   attendees?: string[];

@@ -1,3 +1,4 @@
+
 import React, { useState, useRef } from 'react';
 import { ViewMode, CalendarEvent, Task, EventType, Priority, Document, DocumentStatus } from './types';
 import { Dashboard } from './components/Dashboard';
@@ -6,10 +7,19 @@ import { TaskList } from './components/TaskList';
 import { DocumentList } from './components/DocumentList';
 import { SmartAddModal } from './components/SmartAddModal';
 import { FloatingNotifier } from './components/FloatingNotifier';
-import { LayoutDashboard, Calendar as CalIcon, CalendarDays, CheckSquare, Plus, Bell, FileText, ChevronRight, Briefcase, Database, Download, Upload, ChevronDown, Settings } from 'lucide-react';
+import { LayoutDashboard, Calendar as CalIcon, CalendarDays, CheckSquare, Plus, Bell, FileText, ChevronRight, Briefcase, Database, Download, Upload, ChevronDown, Settings, Palette, X } from 'lucide-react';
 
 // Simple ID generator for this environment
 const generateId = () => Math.random().toString(36).substr(2, 9);
+
+// Default Colors
+const DEFAULT_EVENT_COLORS: Record<EventType, string> = {
+  [EventType.MEETING]: '#3b82f6',      // Blue
+  [EventType.BUSINESS_TRIP]: '#9333ea', // Purple
+  [EventType.EVENT]: '#d97706',         // Amber
+  [EventType.PERSONAL]: '#16a34a',      // Green
+  [EventType.DEEP_WORK]: '#475569'      // Slate
+};
 
 // Mock Data
 const INITIAL_EVENTS: CalendarEvent[] = [
@@ -19,6 +29,7 @@ const INITIAL_EVENTS: CalendarEvent[] = [
     start: new Date(new Date().setHours(8, 0, 0, 0)),
     end: new Date(new Date().setHours(9, 30, 0, 0)),
     type: EventType.MEETING,
+    priority: Priority.URGENT,
     location: 'Phòng họp A'
   },
   {
@@ -27,6 +38,7 @@ const INITIAL_EVENTS: CalendarEvent[] = [
     start: new Date(new Date().setHours(14, 0, 0, 0)),
     end: new Date(new Date().setHours(15, 30, 0, 0)),
     type: EventType.EVENT,
+    priority: Priority.HIGH,
     location: 'Sảnh VIP'
   },
   {
@@ -35,6 +47,7 @@ const INITIAL_EVENTS: CalendarEvent[] = [
     start: new Date(new Date().setHours(16, 0, 0, 0)),
     end: new Date(new Date().setHours(17, 30, 0, 0)),
     type: EventType.DEEP_WORK,
+    priority: Priority.NORMAL,
   }
 ];
 
@@ -94,10 +107,14 @@ const INITIAL_DOCUMENTS: Document[] = [
 export default function App() {
   const [currentView, setCurrentView] = useState<ViewMode>(ViewMode.DASHBOARD);
   const [isSmartAddOpen, setIsSmartAddOpen] = useState(false);
-  const [isSystemMenuOpen, setIsSystemMenuOpen] = useState(false); // State for collapsing system menu
+  const [isSystemMenuOpen, setIsSystemMenuOpen] = useState(false);
+  const [isColorSettingsOpen, setIsColorSettingsOpen] = useState(false);
+  
   const [events, setEvents] = useState<CalendarEvent[]>(INITIAL_EVENTS);
   const [tasks, setTasks] = useState<Task[]>(INITIAL_TASKS);
   const [documents, setDocuments] = useState<Document[]>(INITIAL_DOCUMENTS);
+  const [eventColors, setEventColors] = useState<Record<EventType, string>>(DEFAULT_EVENT_COLORS);
+  
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Handlers
@@ -124,10 +141,15 @@ export default function App() {
         start: event.start || new Date(),
         end: event.end || new Date(new Date().getTime() + 3600000),
         type: event.type || EventType.MEETING,
+        priority: event.priority || Priority.NORMAL,
         location: event.location,
         description: event.description
     };
     setEvents(prev => [...prev, newEvent]);
+  };
+
+  const handleUpdateEvent = (updatedEvent: CalendarEvent) => {
+    setEvents(prev => prev.map(e => e.id === updatedEvent.id ? updatedEvent : e));
   };
 
   const handleAddDocument = (doc: Partial<Document>) => {
@@ -152,12 +174,22 @@ export default function App() {
     setDocuments(prev => prev.map(d => d.id === updatedDoc.id ? updatedDoc : d));
   };
 
+  // Color Settings Handler
+  const handleColorChange = (type: EventType, color: string) => {
+    setEventColors(prev => ({ ...prev, [type]: color }));
+  };
+
+  const handleResetColors = () => {
+    setEventColors(DEFAULT_EVENT_COLORS);
+  };
+
   // --- Backup & Restore Logic ---
   const handleBackup = () => {
     const data = {
       events,
       tasks,
       documents,
+      eventColors, // Save colors too
       exportDate: new Date().toISOString()
     };
     const jsonString = JSON.stringify(data, null, 2);
@@ -214,6 +246,10 @@ export default function App() {
           setDocuments(restoredDocs);
         }
 
+        if (data.eventColors) {
+            setEventColors(data.eventColors);
+        }
+
         alert('Phục hồi dữ liệu thành công!');
       } catch (error) {
         console.error('Error parsing backup file:', error);
@@ -221,8 +257,6 @@ export default function App() {
       }
     };
     reader.readAsText(file);
-    
-    // Reset input so same file can be selected again if needed
     e.target.value = '';
   };
 
@@ -237,12 +271,13 @@ export default function App() {
             documents={documents}
             onTaskToggle={handleTaskToggle}
             onViewAllDocuments={() => setCurrentView(ViewMode.DOCUMENTS)}
+            eventColors={eventColors}
           />
         );
       case ViewMode.CALENDAR_WEEK:
-        return <Calendar events={events} mode={ViewMode.CALENDAR_WEEK} />;
+        return <Calendar events={events} mode={ViewMode.CALENDAR_WEEK} onUpdateEvent={handleUpdateEvent} eventColors={eventColors} />;
       case ViewMode.CALENDAR_MONTH:
-        return <Calendar events={events} mode={ViewMode.CALENDAR_MONTH} />;
+        return <Calendar events={events} mode={ViewMode.CALENDAR_MONTH} onUpdateEvent={handleUpdateEvent} eventColors={eventColors} />;
       case ViewMode.TASKS:
         return <TaskList tasks={tasks} onToggle={handleTaskToggle} onAddTask={handleAddTask} />;
       case ViewMode.DOCUMENTS:
@@ -329,6 +364,13 @@ export default function App() {
           
           {isSystemMenuOpen && (
             <div className="px-4 space-y-2 animate-in slide-in-from-top-1 fade-in duration-200">
+               <button 
+                onClick={() => setIsColorSettingsOpen(true)}
+                className="w-full flex items-center gap-3 px-4 py-2 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white transition-all text-sm"
+              >
+                <Palette className="w-4 h-4" />
+                Cấu hình màu sắc
+              </button>
               <button 
                 onClick={handleBackup}
                 className="w-full flex items-center gap-3 px-4 py-2 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white transition-all text-sm"
@@ -397,6 +439,7 @@ export default function App() {
       {/* Modals & Overlays */}
       {isSmartAddOpen && (
         <SmartAddModal 
+          events={events}
           onClose={() => setIsSmartAddOpen(false)} 
           onAddEvent={handleAddEvent}
           onAddDocument={handleAddDocument}
@@ -404,11 +447,61 @@ export default function App() {
       )}
       
       <FloatingNotifier 
+        events={events}
         tasks={tasks} 
         documents={documents} 
         onViewTask={(id) => setCurrentView(ViewMode.TASKS)}
         onViewDocument={(id) => setCurrentView(ViewMode.DOCUMENTS)}
       />
+
+      {/* Color Settings Modal */}
+      {isColorSettingsOpen && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+                <div className="bg-gradient-to-r from-gray-800 to-gray-900 p-5 text-white flex justify-between items-center">
+                    <h3 className="text-lg font-bold flex items-center gap-2">
+                        <Palette className="w-5 h-5" /> Cấu hình màu sắc sự kiện
+                    </h3>
+                    <button onClick={() => setIsColorSettingsOpen(false)} className="text-white/80 hover:text-white">
+                        <X className="w-5 h-5" />
+                    </button>
+                </div>
+                <div className="p-6 space-y-4">
+                    <p className="text-sm text-gray-500 mb-4">
+                        Chọn màu sắc hiển thị cho từng loại sự kiện trên lịch.
+                    </p>
+                    {Object.values(EventType).map((type) => (
+                        <div key={type} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-100">
+                            <span className="font-medium text-gray-700">{type}</span>
+                            <div className="flex items-center gap-3">
+                                <span className="text-xs text-gray-400 font-mono">{eventColors[type]}</span>
+                                <input 
+                                    type="color" 
+                                    value={eventColors[type]}
+                                    onChange={(e) => handleColorChange(type, e.target.value)}
+                                    className="w-10 h-10 rounded cursor-pointer border-none bg-transparent"
+                                />
+                            </div>
+                        </div>
+                    ))}
+                    <div className="flex justify-between items-center pt-4 border-t border-gray-100 mt-4">
+                        <button 
+                            onClick={handleResetColors}
+                            className="text-sm text-red-500 hover:text-red-700 font-medium"
+                        >
+                            Khôi phục mặc định
+                        </button>
+                        <button 
+                            onClick={() => setIsColorSettingsOpen(false)}
+                            className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium text-sm"
+                        >
+                            Hoàn tất
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+      )}
     </div>
   );
 }

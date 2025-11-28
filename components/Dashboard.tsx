@@ -1,6 +1,7 @@
+
 import React from 'react';
-import { CalendarEvent, Task, Priority, Document, DocumentStatus } from '../types';
-import { formatDate, formatTime, getPriorityColor, getEventTypeColor, getDocumentStatusColor, getRelativeTimeLabel, isOverdue } from '../utils';
+import { CalendarEvent, Task, Priority, Document, DocumentStatus, EventType } from '../types';
+import { formatDate, formatTime, getPriorityColor, getDocumentStatusColor, getRelativeTimeLabel, isOverdue, hexToRgba } from '../utils';
 import { CheckCircle2, Clock, AlertCircle, FileText, ArrowRight, Briefcase, AlertTriangle } from 'lucide-react';
 
 interface DashboardProps {
@@ -9,9 +10,10 @@ interface DashboardProps {
   documents: Document[];
   onTaskToggle: (id: string) => void;
   onViewAllDocuments: () => void;
+  eventColors: Record<EventType, string>;
 }
 
-export const Dashboard: React.FC<DashboardProps> = ({ events, tasks, documents, onTaskToggle, onViewAllDocuments }) => {
+export const Dashboard: React.FC<DashboardProps> = ({ events, tasks, documents, onTaskToggle, onViewAllDocuments, eventColors }) => {
   // Filter today's items
   const today = new Date();
   const todayEvents = events.filter(e => 
@@ -70,25 +72,41 @@ export const Dashboard: React.FC<DashboardProps> = ({ events, tasks, documents, 
           <h1 className="text-3xl font-bold mb-2">Xin chào, Lãnh đạo</h1>
           <p className="text-indigo-100 text-lg mb-6">{formatDate(today)}</p>
           
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-3 border border-white/20">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
               <p className="text-xs text-indigo-200 uppercase tracking-wider font-semibold">Sự kiện hôm nay</p>
-              <p className="text-2xl font-bold">{todayEvents.length}</p>
+              <p className="text-3xl font-bold mt-1">{todayEvents.length}</p>
             </div>
-            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-3 border border-white/20">
+            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
               <p className="text-xs text-indigo-200 uppercase tracking-wider font-semibold">Việc cần làm gấp</p>
-              <p className="text-2xl font-bold">{urgentTasks.length}</p>
+              <p className="text-3xl font-bold mt-1">{urgentTasks.length}</p>
             </div>
-            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-3 border border-white/20">
+            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
               <p className="text-xs text-indigo-200 uppercase tracking-wider font-semibold">Văn bản chờ xử lý</p>
-              <p className="text-2xl font-bold">{pendingDocs.length}</p>
+              <p className="text-3xl font-bold mt-1">{pendingDocs.length}</p>
             </div>
-            {totalOverdue > 0 && (
-                <div className="bg-red-500/20 backdrop-blur-sm rounded-lg p-3 border border-red-200/40 animate-pulse">
-                    <p className="text-xs text-red-100 uppercase tracking-wider font-bold flex items-center gap-1">
-                        <AlertTriangle className="w-3.5 h-3.5" /> Quá hạn
+            
+            {/* Dedicated Overdue Documents Card */}
+            {overdueDocsCount > 0 ? (
+                <div className="bg-red-600 rounded-lg p-4 border border-red-500 shadow-xl shadow-red-900/20 animate-[pulse_2s_cubic-bezier(0.4,0,0.6,1)_infinite]">
+                    <p className="text-xs text-white/90 uppercase tracking-wider font-bold flex items-center gap-1.5">
+                        <AlertCircle className="w-4 h-4" /> Văn bản Quá hạn
                     </p>
-                    <p className="text-2xl font-bold text-white">{totalOverdue}</p>
+                    <p className="text-3xl font-extrabold text-white mt-1">{overdueDocsCount}</p>
+                </div>
+            ) : totalOverdue > 0 ? (
+                 <div className="bg-amber-500/90 rounded-lg p-4 border border-amber-400 shadow-lg">
+                    <p className="text-xs text-white/90 uppercase tracking-wider font-bold flex items-center gap-1.5">
+                        <AlertTriangle className="w-4 h-4" /> Việc quá hạn
+                    </p>
+                    <p className="text-3xl font-bold text-white mt-1">{overdueTasksCount}</p>
+                </div>
+            ) : (
+                <div className="bg-emerald-500/20 backdrop-blur-sm rounded-lg p-4 border border-emerald-400/30">
+                    <p className="text-xs text-emerald-100 uppercase tracking-wider font-bold flex items-center gap-1.5">
+                        <CheckCircle2 className="w-4 h-4" /> Trạng thái
+                    </p>
+                    <p className="text-lg font-bold text-white mt-1">Hoàn hảo</p>
                 </div>
             )}
           </div>
@@ -112,18 +130,33 @@ export const Dashboard: React.FC<DashboardProps> = ({ events, tasks, documents, 
             {todayEvents.length === 0 ? (
               <p className="text-gray-500 text-center py-8">Hôm nay không có lịch trình.</p>
             ) : (
-              todayEvents.map((event) => (
+              todayEvents.map((event) => {
+                const baseColor = eventColors[event.type] || '#3b82f6';
+                return (
                 <div key={event.id} className="flex gap-4 group">
                   <div className="w-16 flex-shrink-0 flex flex-col items-center justify-start pt-1">
                     <span className="text-sm font-bold text-gray-900">{formatTime(new Date(event.start))}</span>
                     <div className="h-full w-0.5 bg-gray-100 mt-2 group-last:hidden"></div>
                   </div>
-                  <div className={`flex-1 p-4 rounded-lg border-l-4 ${getEventTypeColor(event.type).replace('text-', 'border-').split(' ')[2]} bg-white shadow-sm border border-gray-100 hover:shadow-md transition-shadow`}>
+                  <div 
+                    className="flex-1 p-4 rounded-lg border-l-4 shadow-sm border border-gray-100 hover:shadow-md transition-shadow"
+                    style={{
+                        borderLeftColor: baseColor,
+                        backgroundColor: hexToRgba(baseColor, 0.05)
+                    }}
+                  >
                     <div className="flex justify-between items-start">
                       <div>
                         <h3 className="font-semibold text-gray-900">{event.title}</h3>
                         <div className="flex items-center gap-2 mt-1">
-                          <span className={`text-xs px-2 py-0.5 rounded ${getEventTypeColor(event.type)}`}>
+                          <span 
+                            className="text-xs px-2 py-0.5 rounded border"
+                            style={{
+                                backgroundColor: hexToRgba(baseColor, 0.1),
+                                color: baseColor,
+                                borderColor: hexToRgba(baseColor, 0.2)
+                            }}
+                          >
                             {event.type}
                           </span>
                           {event.location && (
@@ -139,7 +172,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ events, tasks, documents, 
                     </div>
                   </div>
                 </div>
-              ))
+              )})
             )}
           </div>
         </div>

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Document, DocumentStatus, Priority } from '../types';
-import { formatDate, getDocumentStatusColor, getPriorityColor } from '../utils';
-import { FileText, AlertTriangle, CheckCircle, Clock, ArrowRight, Bell, Plus, X, Save, Upload, Paperclip, Filter, Pencil, RotateCcw } from 'lucide-react';
+import { formatDate, getDocumentStatusColor } from '../utils';
+import { FileText, AlertTriangle, CheckCircle, Clock, ArrowRight, Bell, Plus, X, Save, Upload, Paperclip, Filter, Pencil, RotateCcw, ArrowUp, ArrowDown, ChevronsUpDown } from 'lucide-react';
 
 interface DocumentListProps {
   documents: Document[];
@@ -13,10 +13,32 @@ interface DocumentListProps {
 type FilterType = 'ALL' | 'PENDING' | 'COMPLETED' | 'REMINDER';
 type DeadlineFilterType = 'ALL' | 'OVERDUE' | 'UPCOMING_3_DAYS';
 
+// Helper function for distinct, accessible priority colors
+const getPriorityBadgeColor = (priority: Priority) => {
+  switch (priority) {
+    case Priority.URGENT:
+      return 'bg-red-100 text-red-800 border-red-200';
+    case Priority.HIGH:
+      return 'bg-orange-100 text-orange-800 border-orange-200';
+    case Priority.NORMAL:
+      return 'bg-blue-100 text-blue-800 border-blue-200';
+    case Priority.LOW:
+      return 'bg-gray-100 text-gray-800 border-gray-200';
+    default:
+      return 'bg-gray-100 text-gray-800 border-gray-200';
+  }
+};
+
 export const DocumentList: React.FC<DocumentListProps> = ({ documents, onUpdateStatus, onAddDocument, onEditDocument }) => {
   const [filter, setFilter] = useState<FilterType>('ALL');
   const [deadlineFilter, setDeadlineFilter] = useState<DeadlineFilterType>('ALL');
   
+  // Sort State
+  const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' }>({ 
+    key: 'deadline', 
+    direction: 'asc' 
+  });
+
   // Add State
   const [isAdding, setIsAdding] = useState(false);
   const [fileName, setFileName] = useState('');
@@ -41,13 +63,60 @@ export const DocumentList: React.FC<DocumentListProps> = ({ documents, onUpdateS
   const [editFormDeadline, setEditFormDeadline] = useState(''); // Handle date input string separately
   const [editFileName, setEditFileName] = useState('');
 
-  // Sort: Strictly by deadline (Nearest/Past -> Farthest/Future)
-  const sortedDocs = [...documents].sort((a, b) => {
-    return new Date(a.deadline).getTime() - new Date(b.deadline).getTime();
+  // Sorting Handler
+  const handleSort = (key: string) => {
+    setSortConfig(current => ({
+        key,
+        direction: current.key === key && current.direction === 'asc' ? 'desc' : 'asc'
+    }));
+  };
+
+  const getSortIcon = (columnKey: string) => {
+      if (sortConfig.key !== columnKey) return <ChevronsUpDown className="w-3 h-3 text-slate-400 opacity-50 group-hover:opacity-100" />;
+      return sortConfig.direction === 'asc' ? <ArrowUp className="w-3 h-3 text-indigo-200" /> : <ArrowDown className="w-3 h-3 text-indigo-200" />;
+  };
+
+  // Sort Logic
+  const sortedDocuments = [...documents].sort((a, b) => {
+      let comparison = 0;
+      
+      switch (sortConfig.key) {
+        case 'priority':
+             // Custom sort for Priority Enum
+             const pScore = { [Priority.URGENT]: 3, [Priority.HIGH]: 2, [Priority.NORMAL]: 1, [Priority.LOW]: 0 };
+             comparison = pScore[a.priority as Priority] - pScore[b.priority as Priority];
+             break;
+        case 'deadline':
+             comparison = new Date(a.deadline).getTime() - new Date(b.deadline).getTime();
+             break;
+        case 'status':
+             // Group by status logic: Overdue > Pending > In Progress > Completed
+             const sScore = { 
+                 [DocumentStatus.OVERDUE]: 0, 
+                 [DocumentStatus.PENDING]: 1, 
+                 [DocumentStatus.IN_PROGRESS]: 2, 
+                 [DocumentStatus.COMPLETED]: 3 
+             };
+             comparison = sScore[a.status as DocumentStatus] - sScore[b.status as DocumentStatus];
+             break;
+        case 'code':
+             comparison = a.code.localeCompare(b.code);
+             break;
+        case 'submitter':
+             comparison = a.submitter.localeCompare(b.submitter);
+             break;
+        case 'title':
+             comparison = a.title.localeCompare(b.title);
+             break;
+        default:
+             return 0;
+      }
+      
+      return sortConfig.direction === 'asc' ? comparison : -comparison;
   });
 
-  // Filter Logic
-  const displayDocs = sortedDocs.filter(doc => {
+  // Filter Logic applied on Sorted Data
+  const displayDocs = sortedDocuments.filter(doc => {
     // 1. Status Filter
     let matchesStatus = true;
     if (filter === 'PENDING') {
@@ -494,12 +563,42 @@ export const DocumentList: React.FC<DocumentListProps> = ({ documents, onUpdateS
           <table className="w-full text-left border-collapse">
             <thead className="bg-slate-800 text-white text-xs uppercase font-semibold tracking-wider">
               <tr>
-                <th className="px-6 py-4 rounded-tl-lg">Số ký hiệu</th>
-                <th className="px-6 py-4 w-1/3">Trích yếu nội dung</th>
-                <th className="px-6 py-4">Đơn vị trình</th>
-                <th className="px-6 py-4">Độ khẩn</th>
-                <th className="px-6 py-4">Hạn xử lý</th>
-                <th className="px-6 py-4">Trạng thái</th>
+                <th className="px-6 py-4 rounded-tl-lg cursor-pointer hover:bg-slate-700 transition-colors group select-none" onClick={() => handleSort('code')}>
+                    <div className="flex items-center gap-2">
+                        Số ký hiệu
+                        {getSortIcon('code')}
+                    </div>
+                </th>
+                <th className="px-6 py-4 w-1/3 cursor-pointer hover:bg-slate-700 transition-colors group select-none" onClick={() => handleSort('title')}>
+                    <div className="flex items-center gap-2">
+                        Trích yếu nội dung
+                        {getSortIcon('title')}
+                    </div>
+                </th>
+                <th className="px-6 py-4 cursor-pointer hover:bg-slate-700 transition-colors group select-none" onClick={() => handleSort('submitter')}>
+                    <div className="flex items-center gap-2">
+                        Đơn vị trình
+                        {getSortIcon('submitter')}
+                    </div>
+                </th>
+                <th className="px-6 py-4 cursor-pointer hover:bg-slate-700 transition-colors group select-none" onClick={() => handleSort('priority')}>
+                    <div className="flex items-center gap-2">
+                        Độ khẩn
+                        {getSortIcon('priority')}
+                    </div>
+                </th>
+                <th className="px-6 py-4 cursor-pointer hover:bg-slate-700 transition-colors group select-none" onClick={() => handleSort('deadline')}>
+                    <div className="flex items-center gap-2">
+                        Hạn xử lý
+                        {getSortIcon('deadline')}
+                    </div>
+                </th>
+                <th className="px-6 py-4 cursor-pointer hover:bg-slate-700 transition-colors group select-none" onClick={() => handleSort('status')}>
+                    <div className="flex items-center gap-2">
+                        Trạng thái
+                        {getSortIcon('status')}
+                    </div>
+                </th>
                 <th className="px-6 py-4 rounded-tr-lg text-right">Thao tác</th>
               </tr>
             </thead>
@@ -538,7 +637,7 @@ export const DocumentList: React.FC<DocumentListProps> = ({ documents, onUpdateS
                     {doc.submitter}
                   </td>
                   <td className="px-6 py-4">
-                     <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold border shadow-sm ${getPriorityColor(doc.priority)}`}>
+                     <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold border shadow-sm ${getPriorityBadgeColor(doc.priority)}`}>
                         {doc.priority}
                      </span>
                   </td>

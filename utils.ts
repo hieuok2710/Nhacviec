@@ -74,7 +74,21 @@ export const getRelativeTimeLabel = (date: Date): string => {
   return formatDate(date).split(',')[1]?.trim() || formatDate(date);
 };
 
+export const hexToRgba = (hex: string, alpha: number): string => {
+  let c: any;
+  if(/^#([A-Fa-f0-9]{3}){1,2}$/.test(hex)){
+      c= hex.substring(1).split('');
+      if(c.length== 3){
+          c= [c[0], c[0], c[1], c[1], c[2], c[2]];
+      }
+      c= '0x'+c.join('');
+      return 'rgba('+[(c>>16)&255, (c>>8)&255, c&255].join(',')+','+alpha+')';
+  }
+  return hex; // Fallback if invalid hex
+};
+
 // Styling helpers
+// NOTE: These may be overridden by dynamic colors in components
 export const getEventTypeColor = (type: EventType): string => {
   switch (type) {
     case EventType.MEETING: return 'bg-blue-100 text-blue-700 border-blue-200';

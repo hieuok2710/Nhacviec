@@ -1,17 +1,24 @@
+
 import React, { useState } from 'react';
 import { CalendarEvent, EventType, Document, Priority } from '../types';
 import { X, Calendar, MapPin, AlignLeft, Clock, FileText, Building2, AlertTriangle, Hash } from 'lucide-react';
+import { formatTime } from '../utils';
 
 interface SmartAddModalProps {
   onClose: () => void;
   onAddEvent: (event: Partial<CalendarEvent>) => void;
   onAddDocument: (doc: Partial<Document>) => void;
+  events?: CalendarEvent[];
 }
 
 type Tab = 'EVENT' | 'DOCUMENT';
 
-export const SmartAddModal: React.FC<SmartAddModalProps> = ({ onClose, onAddEvent, onAddDocument }) => {
+export const SmartAddModal: React.FC<SmartAddModalProps> = ({ onClose, onAddEvent, onAddDocument, events }) => {
   const [activeTab, setActiveTab] = useState<Tab>('EVENT');
+  
+  // Conflict Warning State
+  const [showConflictConfirm, setShowConflictConfirm] = useState(false);
+  const [conflictingEvent, setConflictingEvent] = useState<CalendarEvent | null>(null);
 
   // Event Form State
   const [eventData, setEventData] = useState({
@@ -19,6 +26,7 @@ export const SmartAddModal: React.FC<SmartAddModalProps> = ({ onClose, onAddEven
     start: '',
     end: '',
     type: EventType.MEETING,
+    priority: Priority.NORMAL,
     location: '',
     description: ''
   });
@@ -46,11 +54,36 @@ export const SmartAddModal: React.FC<SmartAddModalProps> = ({ onClose, onAddEven
     e.preventDefault();
     if (!eventData.title || !eventData.start || !eventData.end) return;
 
+    const newStart = new Date(eventData.start);
+    const newEnd = new Date(eventData.end);
+
+    // Conflict Check (Overlapping High/Urgent Events)
+    // Only check if we are not already in confirmation mode and we have events to check against
+    if (!showConflictConfirm && events) {
+        const conflict = events.find(ev => {
+            const evStart = new Date(ev.start);
+            const evEnd = new Date(ev.end);
+            
+            // Overlap condition: Start A < End B AND End A > Start B
+            const isOverlapping = newStart < evEnd && newEnd > evStart;
+            const isHighPriority = ev.priority === Priority.URGENT || ev.priority === Priority.HIGH;
+
+            return isOverlapping && isHighPriority;
+        });
+
+        if (conflict) {
+            setConflictingEvent(conflict);
+            setShowConflictConfirm(true);
+            return;
+        }
+    }
+
     onAddEvent({
       title: eventData.title,
-      start: new Date(eventData.start),
-      end: new Date(eventData.end),
+      start: newStart,
+      end: newEnd,
       type: eventData.type as EventType,
+      priority: eventData.priority as Priority,
       location: eventData.location,
       description: eventData.description
     });
@@ -73,7 +106,54 @@ export const SmartAddModal: React.FC<SmartAddModalProps> = ({ onClose, onAddEven
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200 relative">
+        
+        {/* Conflict Warning Overlay */}
+        {showConflictConfirm && conflictingEvent && (
+            <div className="absolute inset-0 bg-white/98 z-50 flex flex-col items-center justify-center p-8 text-center animate-in fade-in duration-200">
+                <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mb-4 text-red-600 animate-pulse">
+                    <AlertTriangle className="w-8 h-8" />
+                </div>
+                <h3 className="text-xl font-bold text-gray-900 mb-2">Cảnh báo trùng lịch</h3>
+                <p className="text-gray-500 mb-6 text-sm">
+                    Thời gian bạn chọn trùng với một sự kiện quan trọng đã có trong lịch trình.
+                </p>
+                
+                <div className="bg-red-50 border border-red-100 rounded-xl p-4 w-full mb-8 text-left shadow-sm">
+                    <div className="flex justify-between items-start mb-1">
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-200 text-red-800 border border-red-300">
+                            {conflictingEvent.priority}
+                        </span>
+                        <span className="text-xs text-red-700 font-medium flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            {formatTime(new Date(conflictingEvent.start))} - {formatTime(new Date(conflictingEvent.end))}
+                        </span>
+                    </div>
+                    <h4 className="font-bold text-red-900 text-sm mt-1">{conflictingEvent.title}</h4>
+                    {conflictingEvent.location && (
+                        <p className="text-xs text-red-700 mt-1 flex items-center gap-1">
+                           📍 {conflictingEvent.location}
+                        </p>
+                    )}
+                </div>
+
+                <div className="flex gap-3 w-full">
+                    <button 
+                        onClick={() => setShowConflictConfirm(false)}
+                        className="flex-1 py-2.5 bg-gray-100 text-gray-700 font-semibold rounded-xl hover:bg-gray-200 transition-colors text-sm"
+                    >
+                        Quay lại chỉnh sửa
+                    </button>
+                    <button 
+                        onClick={handleEventSubmit}
+                        className="flex-1 py-2.5 bg-red-600 text-white font-semibold rounded-xl hover:bg-red-700 transition-colors shadow-lg shadow-red-200 text-sm"
+                    >
+                        Vẫn thêm
+                    </button>
+                </div>
+            </div>
+        )}
+
         {/* Header */}
         <div className="bg-gradient-to-r from-indigo-600 to-violet-600 p-5 text-white flex justify-between items-center">
           <h2 className="text-xl font-bold flex items-center gap-2">
@@ -159,18 +239,32 @@ export const SmartAddModal: React.FC<SmartAddModalProps> = ({ onClose, onAddEven
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wider">Địa điểm</label>
-                    <div className="relative">
-                        <MapPin className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" />
-                        <input
-                            type="text"
-                            name="location"
-                            value={eventData.location}
-                            onChange={handleEventChange}
-                            placeholder="Phòng họp A"
-                            className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
-                        />
-                    </div>
+                    <label className="block text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wider">Mức độ ưu tiên</label>
+                    <select
+                      name="priority"
+                      value={eventData.priority}
+                      onChange={handleEventChange}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none bg-white"
+                    >
+                      {Object.values(Priority).map((p) => (
+                        <option key={p} value={p}>{p}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wider">Địa điểm</label>
+                  <div className="relative">
+                      <MapPin className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" />
+                      <input
+                          type="text"
+                          name="location"
+                          value={eventData.location}
+                          onChange={handleEventChange}
+                          placeholder="Phòng họp A"
+                          className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+                      />
                   </div>
                 </div>
 

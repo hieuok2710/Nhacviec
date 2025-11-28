@@ -1,15 +1,19 @@
+
 import React, { useState, useEffect, useRef } from 'react';
-import { CalendarEvent, ViewMode } from '../types';
-import { getStartOfWeek, addDays, isSameDay, formatTime, getEventTypeColor, getWeekNumber } from '../utils';
+import { CalendarEvent, ViewMode, EventType } from '../types';
+import { getStartOfWeek, addDays, isSameDay, formatTime, getWeekNumber, hexToRgba } from '../utils';
 import { ChevronLeft, ChevronRight, Calendar as CalIcon, Clock, MapPin } from 'lucide-react';
 
 interface CalendarProps {
   events: CalendarEvent[];
   mode: ViewMode;
+  onUpdateEvent: (event: CalendarEvent) => void;
+  eventColors: Record<EventType, string>;
 }
 
-export const Calendar: React.FC<CalendarProps> = ({ events, mode }) => {
+export const Calendar: React.FC<CalendarProps> = ({ events, mode, onUpdateEvent, eventColors }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [draggedEventId, setDraggedEventId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Cấu hình khung giờ làm việc: 07:00 - 18:00 (Leader Standard)
@@ -39,7 +43,79 @@ export const Calendar: React.FC<CalendarProps> = ({ events, mode }) => {
     }
   }, [mode]);
 
-  // Helper for Month View
+  // --- Drag and Drop Logic ---
+
+  const handleDragStart = (e: React.DragEvent, eventId: string) => {
+    setDraggedEventId(eventId);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', eventId);
+    
+    // Create a ghost image if needed, or rely on browser default
+    // const crt = e.currentTarget.cloneNode(true) as HTMLElement;
+    // crt.style.opacity = "1"; 
+    // e.dataTransfer.setDragImage(crt, 0, 0);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleDropWeek = (e: React.DragEvent, targetDate: Date) => {
+    e.preventDefault();
+    if (!draggedEventId) return;
+    
+    const event = events.find(e => e.id === draggedEventId);
+    if (!event) return;
+
+    // Calculate time based on Y position inside the column
+    // We use currentTarget (the column div) to get the bounding rect
+    const rect = e.currentTarget.getBoundingClientRect();
+    const y = e.clientY - rect.top;
+    
+    // Clamp y to ensure we don't go out of bounds (negative or too large)
+    const clampedY = Math.max(0, Math.min(y, rect.height));
+    
+    // Calculate minutes from start of day (START_HOUR)
+    const minutesFromStart = (clampedY / HOUR_HEIGHT) * 60;
+    
+    // Snap to nearest 15 minutes
+    const snappedMinutes = Math.round(minutesFromStart / 15) * 15;
+    
+    const newStart = new Date(targetDate);
+    newStart.setHours(START_HOUR, 0, 0, 0); // Start at 7:00 base
+    newStart.setMinutes(snappedMinutes);
+    
+    // Calculate duration to preserve it
+    const duration = new Date(event.end).getTime() - new Date(event.start).getTime();
+    const newEnd = new Date(newStart.getTime() + duration);
+    
+    // Validation: Don't allow end time to exceed reasonably (e.g., next day) if desired, 
+    // but here we just update.
+    
+    onUpdateEvent({ ...event, start: newStart, end: newEnd });
+    setDraggedEventId(null);
+  };
+
+  const handleDropMonth = (e: React.DragEvent, targetDate: Date) => {
+    e.preventDefault();
+    if (!draggedEventId) return;
+
+    const event = events.find(e => e.id === draggedEventId);
+    if (!event) return;
+
+    // Preserve time, change date
+    const newStart = new Date(targetDate);
+    newStart.setHours(new Date(event.start).getHours(), new Date(event.start).getMinutes());
+    
+    const duration = new Date(event.end).getTime() - new Date(event.start).getTime();
+    const newEnd = new Date(newStart.getTime() + duration);
+    
+    onUpdateEvent({ ...event, start: newStart, end: newEnd });
+    setDraggedEventId(null);
+  };
+
+  // --- Helper for Month View ---
   const getMonthDays = (date: Date) => {
     const year = date.getFullYear();
     const month = date.getMonth();
@@ -209,30 +285,49 @@ export const Calendar: React.FC<CalendarProps> = ({ events, mode }) => {
                         const isToday = isSameDay(date, new Date());
                         
                         return (
-                            <div key={colIdx} className={`relative z-10 h-full group ${isToday ? 'bg-indigo-50/10' : ''}`}>
+                            <div 
+                                key={colIdx} 
+                                className={`relative z-10 h-full group ${isToday ? 'bg-indigo-50/10' : ''}`}
+                                onDragOver={handleDragOver}
+                                onDrop={(e) => handleDropWeek(e, date)}
+                            >
                                 {/* Column Hover Highlight */}
                                 <div className="absolute inset-0 bg-gray-50 opacity-0 group-hover:opacity-40 transition-opacity pointer-events-none"></div>
                                 
                                 {dayEvents.map(event => {
-                                    const style = getEventLayout(event, dayEvents);
-                                    const colors = getEventTypeColor(event.type);
-                                    // Enhance visibility for leader view
-                                    const enhancedColors = colors.replace('bg-', 'bg-opacity-90 bg-').replace('border-', 'border-l-4 shadow-sm border-');
+                                    const layoutStyle = getEventLayout(event, dayEvents);
+                                    
+                                    // Dynamic Styling based on User Preferences
+                                    const baseColor = eventColors[event.type] || '#3b82f6';
+                                    const eventStyle = {
+                                        backgroundColor: hexToRgba(baseColor, 0.15),
+                                        color: baseColor, // Darker text handled by using base color
+                                        borderLeftColor: baseColor,
+                                        borderLeftWidth: '4px',
+                                        borderStyle: 'solid',
+                                        // Need to explicitly set other borders to transparent or thin
+                                        borderTop: `1px solid ${hexToRgba(baseColor, 0.2)}`,
+                                        borderRight: `1px solid ${hexToRgba(baseColor, 0.2)}`,
+                                        borderBottom: `1px solid ${hexToRgba(baseColor, 0.2)}`,
+                                    };
                                     
                                     return (
                                         <div
                                             key={event.id}
-                                            className={`absolute rounded-r-md px-2 py-1.5 text-xs overflow-hidden hover:z-50 hover:shadow-lg hover:scale-[1.02] transition-all cursor-pointer ${enhancedColors}`}
+                                            draggable
+                                            onDragStart={(e) => handleDragStart(e, event.id)}
+                                            className={`absolute rounded-r-md px-2 py-1.5 text-xs overflow-hidden hover:z-50 hover:shadow-lg hover:scale-[1.02] transition-all cursor-move ${draggedEventId === event.id ? 'opacity-50' : ''}`}
                                             style={{
-                                                ...style,
+                                                ...layoutStyle,
+                                                ...eventStyle,
                                                 // Add a tiny gap between overlapped events
-                                                width: `calc(${style.width} - 4px)`,
-                                                left: `calc(${style.left} + 2px)`
+                                                width: `calc(${layoutStyle.width} - 4px)`,
+                                                left: `calc(${layoutStyle.left} + 2px)`
                                             }}
                                             title={`${event.title}\n${formatTime(new Date(event.start))} - ${formatTime(new Date(event.end))}\n${event.location || 'Chưa có địa điểm'}`}
                                         >
-                                            <div className="font-bold truncate text-[11px] leading-tight">{event.title}</div>
-                                            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5 opacity-90">
+                                            <div className="font-bold truncate text-[11px] leading-tight pointer-events-none" style={{ color: 'inherit', filter: 'brightness(0.6)' }}>{event.title}</div>
+                                            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5 opacity-90 pointer-events-none" style={{ color: 'inherit', filter: 'brightness(0.8)' }}>
                                                 <div className="flex items-center gap-0.5">
                                                     <Clock className="w-2.5 h-2.5" />
                                                     <span className="font-medium">{formatTime(new Date(event.start))} - {formatTime(new Date(event.end))}</span>
@@ -292,6 +387,8 @@ export const Calendar: React.FC<CalendarProps> = ({ events, mode }) => {
                             <div 
                                 key={idx} 
                                 className={`min-h-[120px] border-b border-r border-gray-100 p-2 transition-colors hover:bg-gray-50 flex flex-col relative ${!isCurrentMonth ? 'bg-gray-50/50 text-gray-400' : 'bg-white'}`}
+                                onDragOver={handleDragOver}
+                                onDrop={(e) => handleDropMonth(e, date)}
                             >
                                 <div className="flex justify-center mb-2">
                                     <span className={`w-6 h-6 flex items-center justify-center rounded-full text-xs font-bold ${isToday ? 'bg-indigo-600 text-white shadow-md' : 'text-gray-700'}`}>
@@ -300,38 +397,52 @@ export const Calendar: React.FC<CalendarProps> = ({ events, mode }) => {
                                 </div>
                                 
                                 <div className="space-y-1 flex-1">
-                                    {dayEvents.slice(0, 3).map(event => (
-                                        <div key={event.id} className="relative group">
-                                            {/* Event Bar */}
-                                            <div className={`px-1.5 py-1 rounded text-[10px] font-medium truncate cursor-pointer ${getEventTypeColor(event.type).replace('text-', 'text-opacity-90 text-').replace('border-', 'border-l-2 ')} border-l-2 hover:opacity-80 transition-opacity`}>
-                                                <span className="font-bold mr-1">{formatTime(new Date(event.start))}</span>
-                                                {event.title}
-                                            </div>
-                                            
-                                            {/* Hover Preview Tooltip */}
-                                            <div className={`absolute z-50 w-64 p-3 bg-slate-800 text-white text-xs rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 pointer-events-none ${isRightSide ? 'right-0' : 'left-0'} ${isBottomRow ? 'bottom-full mb-1' : 'top-full mt-1'}`}>
-                                                <div className="font-bold text-sm mb-1 text-white">{event.title}</div>
-                                                <div className="space-y-1.5 text-slate-300">
-                                                    <div className="flex items-center gap-2">
-                                                        <Clock className="w-3.5 h-3.5 text-slate-400" />
-                                                        <span>{formatTime(new Date(event.start))} - {formatTime(new Date(event.end))}</span>
-                                                    </div>
-                                                    {event.location && (
-                                                        <div className="flex items-center gap-2">
-                                                            <MapPin className="w-3.5 h-3.5 text-slate-400" />
-                                                            <span>{event.location}</span>
-                                                        </div>
-                                                    )}
-                                                    <div className="mt-2 pt-2 border-t border-slate-700 flex items-center justify-between">
-                                                        <span className="text-[10px] uppercase tracking-wider font-semibold text-slate-400">
-                                                            {event.type}
-                                                        </span>
-                                                        {event.description && <span className="text-[10px] italic">Có ghi chú</span>}
-                                                    </div>
+                                    {dayEvents.slice(0, 3).map(event => {
+                                        const baseColor = eventColors[event.type] || '#64748b';
+                                        return (
+                                            <div key={event.id} className="relative group">
+                                                {/* Event Bar */}
+                                                <div 
+                                                    draggable
+                                                    onDragStart={(e) => handleDragStart(e, event.id)}
+                                                    className={`px-1.5 py-1 rounded text-[10px] font-medium truncate cursor-move border-l-2 hover:opacity-80 transition-opacity ${draggedEventId === event.id ? 'opacity-50' : ''}`}
+                                                    style={{
+                                                        backgroundColor: hexToRgba(baseColor, 0.15),
+                                                        color: baseColor,
+                                                        borderLeftColor: baseColor
+                                                    }}
+                                                >
+                                                    <span className="font-bold mr-1 pointer-events-none" style={{ filter: 'brightness(0.7)' }}>{formatTime(new Date(event.start))}</span>
+                                                    <span style={{ filter: 'brightness(0.6)' }}>{event.title}</span>
                                                 </div>
+                                                
+                                                {/* Hover Preview Tooltip */}
+                                                {!draggedEventId && (
+                                                    <div className={`absolute z-50 w-64 p-3 bg-slate-800 text-white text-xs rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 pointer-events-none ${isRightSide ? 'right-0' : 'left-0'} ${isBottomRow ? 'bottom-full mb-1' : 'top-full mt-1'}`}>
+                                                        <div className="font-bold text-sm mb-1 text-white">{event.title}</div>
+                                                        <div className="space-y-1.5 text-slate-300">
+                                                            <div className="flex items-center gap-2">
+                                                                <Clock className="w-3.5 h-3.5 text-slate-400" />
+                                                                <span>{formatTime(new Date(event.start))} - {formatTime(new Date(event.end))}</span>
+                                                            </div>
+                                                            {event.location && (
+                                                                <div className="flex items-center gap-2">
+                                                                    <MapPin className="w-3.5 h-3.5 text-slate-400" />
+                                                                    <span>{event.location}</span>
+                                                                </div>
+                                                            )}
+                                                            <div className="mt-2 pt-2 border-t border-slate-700 flex items-center justify-between">
+                                                                <span className="text-[10px] uppercase tracking-wider font-semibold text-slate-400" style={{ color: baseColor }}>
+                                                                    {event.type}
+                                                                </span>
+                                                                {event.description && <span className="text-[10px] italic">Có ghi chú</span>}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                )}
                                             </div>
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
                                     
                                     {/* More Count */}
                                     {dayEvents.length > 3 && (
