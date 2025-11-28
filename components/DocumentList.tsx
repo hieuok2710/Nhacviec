@@ -1,20 +1,23 @@
 import React, { useState } from 'react';
 import { Document, DocumentStatus, Priority } from '../types';
 import { formatDate, getDocumentStatusColor, getPriorityColor } from '../utils';
-import { FileText, AlertTriangle, CheckCircle, Clock, ArrowRight, Bell, Plus, X, Save, Upload, Paperclip, Filter } from 'lucide-react';
+import { FileText, AlertTriangle, CheckCircle, Clock, ArrowRight, Bell, Plus, X, Save, Upload, Paperclip, Filter, Pencil, RotateCcw } from 'lucide-react';
 
 interface DocumentListProps {
   documents: Document[];
   onUpdateStatus: (id: string, newStatus: DocumentStatus) => void;
   onAddDocument: (doc: Partial<Document>) => void;
+  onEditDocument: (doc: Document) => void;
 }
 
-type FilterType = 'ALL' | 'PENDING' | 'REMINDER';
+type FilterType = 'ALL' | 'PENDING' | 'COMPLETED' | 'REMINDER';
 type DeadlineFilterType = 'ALL' | 'OVERDUE' | 'UPCOMING_3_DAYS';
 
-export const DocumentList: React.FC<DocumentListProps> = ({ documents, onUpdateStatus, onAddDocument }) => {
+export const DocumentList: React.FC<DocumentListProps> = ({ documents, onUpdateStatus, onAddDocument, onEditDocument }) => {
   const [filter, setFilter] = useState<FilterType>('ALL');
   const [deadlineFilter, setDeadlineFilter] = useState<DeadlineFilterType>('ALL');
+  
+  // Add State
   const [isAdding, setIsAdding] = useState(false);
   const [fileName, setFileName] = useState('');
   const [newDoc, setNewDoc] = useState<{
@@ -33,6 +36,11 @@ export const DocumentList: React.FC<DocumentListProps> = ({ documents, onUpdateS
     attachmentUrl: undefined
   });
 
+  // Edit State
+  const [editingDoc, setEditingDoc] = useState<Document | null>(null);
+  const [editFormDeadline, setEditFormDeadline] = useState(''); // Handle date input string separately
+  const [editFileName, setEditFileName] = useState('');
+
   // Sort: Strictly by deadline (Nearest/Past -> Farthest/Future)
   const sortedDocs = [...documents].sort((a, b) => {
     return new Date(a.deadline).getTime() - new Date(b.deadline).getTime();
@@ -44,6 +52,8 @@ export const DocumentList: React.FC<DocumentListProps> = ({ documents, onUpdateS
     let matchesStatus = true;
     if (filter === 'PENDING') {
         matchesStatus = doc.status === DocumentStatus.PENDING || doc.status === DocumentStatus.IN_PROGRESS;
+    } else if (filter === 'COMPLETED') {
+        matchesStatus = doc.status === DocumentStatus.COMPLETED;
     } else if (filter === 'REMINDER') {
         // Show urgent priority OR overdue items OR items due soon (within 3 days)
         const isUrgent = doc.priority === Priority.URGENT;
@@ -115,6 +125,43 @@ export const DocumentList: React.FC<DocumentListProps> = ({ documents, onUpdateS
     });
     setFileName('');
     setIsAdding(false);
+  };
+
+  // Edit Handlers
+  const handleEditClick = (doc: Document) => {
+      // Format date for input "YYYY-MM-DD" keeping local time
+      const d = new Date(doc.deadline);
+      const offset = d.getTimezoneOffset();
+      const localDate = new Date(d.getTime() - (offset * 60 * 1000));
+      const deadlineStr = localDate.toISOString().split('T')[0];
+
+      setEditingDoc({ ...doc });
+      setEditFormDeadline(deadlineStr);
+      // Extract filename from existing url (fake logic) or reset
+      setEditFileName(doc.attachmentUrl ? 'Tệp đính kèm hiện tại' : '');
+  };
+
+  const handleEditFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0] && editingDoc) {
+      const file = e.target.files[0];
+      setEditFileName(file.name);
+      const url = URL.createObjectURL(file);
+      setEditingDoc({ ...editingDoc, attachmentUrl: url });
+    }
+  };
+
+  const handleSaveEdit = (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!editingDoc || !editingDoc.title.trim()) return;
+
+      onEditDocument({
+          ...editingDoc,
+          deadline: editFormDeadline ? new Date(editFormDeadline) : editingDoc.deadline
+      });
+
+      setEditingDoc(null);
+      setEditFormDeadline('');
+      setEditFileName('');
   };
 
   return (
@@ -274,6 +321,107 @@ export const DocumentList: React.FC<DocumentListProps> = ({ documents, onUpdateS
           </div>
       )}
 
+      {/* Edit Document Modal */}
+      {editingDoc && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+             <div className="bg-indigo-600 p-4 flex justify-between items-center text-white">
+                 <h3 className="font-bold text-lg flex items-center gap-2">
+                     <Pencil className="w-5 h-5" /> Chỉnh sửa văn bản
+                 </h3>
+                 <button onClick={() => setEditingDoc(null)} className="text-white/80 hover:text-white transition-colors">
+                     <X className="w-6 h-6" />
+                 </button>
+             </div>
+             
+             <form onSubmit={handleSaveEdit} className="p-6">
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                     <div>
+                         <label className="block text-xs font-medium text-gray-600 mb-1">Số ký hiệu</label>
+                         <input 
+                             type="text" 
+                             className="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                             value={editingDoc.code}
+                             onChange={(e) => setEditingDoc({...editingDoc, code: e.target.value})}
+                         />
+                     </div>
+                     <div>
+                         <label className="block text-xs font-medium text-gray-600 mb-1">Đơn vị trình</label>
+                         <input 
+                             type="text" 
+                             className="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                             value={editingDoc.submitter}
+                             onChange={(e) => setEditingDoc({...editingDoc, submitter: e.target.value})}
+                         />
+                     </div>
+                     <div>
+                         <label className="block text-xs font-medium text-gray-600 mb-1">Độ khẩn</label>
+                         <select 
+                             className="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                             value={editingDoc.priority}
+                             onChange={(e) => setEditingDoc({...editingDoc, priority: e.target.value as Priority})}
+                         >
+                             {Object.values(Priority).map(p => <option key={p} value={p}>{p}</option>)}
+                         </select>
+                     </div>
+                     <div>
+                         <label className="block text-xs font-medium text-gray-600 mb-1">Hạn xử lý</label>
+                         <input 
+                             type="date" 
+                             className="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                             value={editFormDeadline}
+                             onChange={(e) => setEditFormDeadline(e.target.value)}
+                         />
+                     </div>
+                 </div>
+                 
+                 <div className="mb-4">
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Trích yếu nội dung *</label>
+                    <textarea 
+                        rows={3}
+                        className="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none resize-none"
+                        value={editingDoc.title}
+                        onChange={(e) => setEditingDoc({...editingDoc, title: e.target.value})}
+                        required
+                    />
+                 </div>
+
+                 <div className="mb-6">
+                     <label className="block text-xs font-medium text-gray-600 mb-1">Cập nhật tệp đính kèm</label>
+                     <div className="flex items-center gap-3">
+                         <label className="cursor-pointer bg-white border border-gray-300 border-dashed rounded-lg px-4 py-2 hover:bg-gray-50 transition-colors flex items-center gap-2 text-sm text-gray-700 w-fit">
+                             <Upload className="w-4 h-4 text-gray-500" />
+                             {editFileName || "Tải lên tệp mới..."}
+                             <input type="file" className="hidden" onChange={handleEditFileChange} />
+                         </label>
+                         {editingDoc.attachmentUrl && (
+                             <a href={editingDoc.attachmentUrl} target="_blank" rel="noreferrer" className="text-xs text-indigo-600 underline">
+                                 Xem tệp hiện tại
+                             </a>
+                         )}
+                     </div>
+                 </div>
+
+                 <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
+                     <button 
+                         type="button" 
+                         onClick={() => setEditingDoc(null)}
+                         className="px-4 py-2 text-sm text-gray-600 font-medium hover:bg-gray-100 rounded-lg transition-colors"
+                     >
+                         Hủy
+                     </button>
+                     <button 
+                         type="submit" 
+                         className="px-4 py-2 text-sm bg-indigo-600 text-white font-medium hover:bg-indigo-700 rounded-lg transition-colors shadow-sm"
+                     >
+                         Lưu thay đổi
+                     </button>
+                 </div>
+             </form>
+          </div>
+        </div>
+      )}
+
       {/* Main List */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
         <div className="p-6 border-b border-gray-100 flex flex-col sm:flex-row justify-between items-center gap-4">
@@ -296,14 +444,18 @@ export const DocumentList: React.FC<DocumentListProps> = ({ documents, onUpdateS
           <div className="flex flex-col sm:flex-row gap-3 items-center">
              {/* Deadline Filter */}
              <div className="relative">
-                <Filter className="absolute left-2.5 top-2.5 w-4 h-4 text-gray-400" />
+                <Filter className={`absolute left-2.5 top-2.5 w-4 h-4 ${deadlineFilter !== 'ALL' ? 'text-indigo-600' : 'text-gray-400'}`} />
                 <select 
                     value={deadlineFilter}
                     onChange={(e) => setDeadlineFilter(e.target.value as DeadlineFilterType)}
-                    className="pl-9 pr-8 py-1.5 rounded-lg border border-gray-200 text-sm font-medium focus:outline-none focus:border-indigo-500 bg-white text-gray-600 cursor-pointer hover:bg-gray-50 transition-colors"
+                    className={`pl-9 pr-8 py-1.5 rounded-lg border text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 cursor-pointer transition-colors ${
+                        deadlineFilter !== 'ALL' 
+                        ? 'bg-indigo-50 border-indigo-200 text-indigo-700' 
+                        : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+                    }`}
                 >
                     <option value="ALL">Tất cả thời hạn</option>
-                    <option value="UPCOMING_3_DAYS">Trong 3 ngày tới</option>
+                    <option value="UPCOMING_3_DAYS">Sắp đến hạn (3 ngày)</option>
                     <option value="OVERDUE">Đã quá hạn</option>
                 </select>
              </div>
@@ -321,6 +473,12 @@ export const DocumentList: React.FC<DocumentListProps> = ({ documents, onUpdateS
                     className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${filter === 'PENDING' ? 'bg-white text-amber-600 shadow-sm' : 'text-gray-500 hover:bg-gray-200'}`}
                 >
                     Chờ ký
+                </button>
+                <button 
+                    onClick={() => setFilter('COMPLETED')}
+                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${filter === 'COMPLETED' ? 'bg-white text-green-600 shadow-sm' : 'text-gray-500 hover:bg-gray-200'}`}
+                >
+                    Đã duyệt
                 </button>
                 <button 
                     onClick={() => setFilter('REMINDER')}
@@ -346,10 +504,17 @@ export const DocumentList: React.FC<DocumentListProps> = ({ documents, onUpdateS
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {displayDocs.map((doc) => (
-                <tr key={doc.id} className="hover:bg-slate-50 transition-colors group">
-                  <td className="px-6 py-4 font-semibold text-indigo-900 whitespace-nowrap">
-                    {doc.code}
+              {displayDocs.map((doc) => {
+                const isOverdue = doc.status === DocumentStatus.OVERDUE;
+                return (
+                <tr key={doc.id} className={`hover:bg-slate-50 transition-colors group ${isOverdue ? 'bg-red-50/30' : ''}`}>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex items-center gap-2">
+                        {isOverdue && (
+                            <div className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse shadow-sm" title="Văn bản quá hạn"></div>
+                        )}
+                        <span className="font-semibold text-indigo-900">{doc.code}</span>
+                    </div>
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex flex-col gap-1">
@@ -378,8 +543,8 @@ export const DocumentList: React.FC<DocumentListProps> = ({ documents, onUpdateS
                      </span>
                   </td>
                   <td className="px-6 py-4">
-                    <div className="flex items-center gap-1.5 text-sm font-medium text-gray-600">
-                      <Clock className="w-4 h-4 text-gray-400" />
+                    <div className={`flex items-center gap-1.5 text-sm font-medium ${isOverdue ? 'text-red-600 font-bold' : 'text-gray-600'}`}>
+                      <Clock className={`w-4 h-4 ${isOverdue ? 'text-red-500' : 'text-gray-400'}`} />
                       {formatDate(new Date(doc.deadline))}
                     </div>
                   </td>
@@ -389,19 +554,35 @@ export const DocumentList: React.FC<DocumentListProps> = ({ documents, onUpdateS
                     </span>
                   </td>
                   <td className="px-6 py-4 text-right">
-                    {doc.status !== DocumentStatus.COMPLETED ? (
-                        <button 
-                            onClick={() => onUpdateStatus(doc.id, DocumentStatus.COMPLETED)}
-                            className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors inline-flex items-center gap-1"
+                    <div className="flex items-center justify-end gap-2">
+                        <button
+                            onClick={() => handleEditClick(doc)}
+                            className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                            title="Chỉnh sửa"
                         >
-                            Ký duyệt <ArrowRight className="w-3.5 h-3.5" />
+                            <Pencil className="w-4 h-4" />
                         </button>
-                    ) : (
-                        <span className="text-gray-400 text-sm italic">Đã hoàn thành</span>
-                    )}
+                        {doc.status !== DocumentStatus.COMPLETED ? (
+                            <button 
+                                onClick={() => onUpdateStatus(doc.id, DocumentStatus.COMPLETED)}
+                                className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors inline-flex items-center gap-1"
+                                title="Đánh dấu đã xử lý xong"
+                            >
+                                Ký duyệt <ArrowRight className="w-3.5 h-3.5" />
+                            </button>
+                        ) : (
+                            <button 
+                                onClick={() => onUpdateStatus(doc.id, DocumentStatus.PENDING)}
+                                className="bg-gray-100 hover:bg-gray-200 text-gray-600 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors inline-flex items-center gap-1 group/undo"
+                                title="Thu hồi / Đưa về chờ xử lý"
+                            >
+                                <RotateCcw className="w-3.5 h-3.5 group-hover/undo:-rotate-180 transition-transform" /> Thu hồi
+                            </button>
+                        )}
+                    </div>
                   </td>
                 </tr>
-              ))}
+              )})}
               {displayDocs.length === 0 && (
                 <tr>
                     <td colSpan={7} className="px-6 py-12 text-center">

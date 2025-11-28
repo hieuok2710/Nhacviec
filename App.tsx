@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { ViewMode, CalendarEvent, Task, EventType, Priority, Document, DocumentStatus } from './types';
 import { Dashboard } from './components/Dashboard';
 import { Calendar } from './components/Calendar';
@@ -6,7 +6,7 @@ import { TaskList } from './components/TaskList';
 import { DocumentList } from './components/DocumentList';
 import { SmartAddModal } from './components/SmartAddModal';
 import { FloatingNotifier } from './components/FloatingNotifier';
-import { LayoutDashboard, Calendar as CalIcon, CheckSquare, Plus, Bell, FileText, ChevronRight, Briefcase } from 'lucide-react';
+import { LayoutDashboard, Calendar as CalIcon, CheckSquare, Plus, Bell, FileText, ChevronRight, Briefcase, Database, Download, Upload } from 'lucide-react';
 
 // Simple ID generator for this environment
 const generateId = () => Math.random().toString(36).substr(2, 9);
@@ -97,6 +97,7 @@ export default function App() {
   const [events, setEvents] = useState<CalendarEvent[]>(INITIAL_EVENTS);
   const [tasks, setTasks] = useState<Task[]>(INITIAL_TASKS);
   const [documents, setDocuments] = useState<Document[]>(INITIAL_DOCUMENTS);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Handlers
   const handleTaskToggle = (id: string) => {
@@ -146,6 +147,84 @@ export default function App() {
     setDocuments(prev => prev.map(d => d.id === id ? { ...d, status: newStatus } : d));
   };
 
+  const handleEditDocument = (updatedDoc: Document) => {
+    setDocuments(prev => prev.map(d => d.id === updatedDoc.id ? updatedDoc : d));
+  };
+
+  // --- Backup & Restore Logic ---
+  const handleBackup = () => {
+    const data = {
+      events,
+      tasks,
+      documents,
+      exportDate: new Date().toISOString()
+    };
+    const jsonString = JSON.stringify(data, null, 2);
+    const blob = new Blob([jsonString], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `leaderflow-backup-${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleRestoreClick = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const content = event.target?.result as string;
+        const data = JSON.parse(content);
+
+        // Validate and restore Dates (JSON strings -> Date objects)
+        if (data.events && Array.isArray(data.events)) {
+          const restoredEvents = data.events.map((ev: any) => ({
+            ...ev,
+            start: new Date(ev.start),
+            end: new Date(ev.end)
+          }));
+          setEvents(restoredEvents);
+        }
+
+        if (data.tasks && Array.isArray(data.tasks)) {
+          const restoredTasks = data.tasks.map((t: any) => ({
+            ...t,
+            dueDate: t.dueDate ? new Date(t.dueDate) : undefined
+          }));
+          setTasks(restoredTasks);
+        }
+
+        if (data.documents && Array.isArray(data.documents)) {
+          const restoredDocs = data.documents.map((d: any) => ({
+            ...d,
+            deadline: new Date(d.deadline)
+          }));
+          setDocuments(restoredDocs);
+        }
+
+        alert('Phục hồi dữ liệu thành công!');
+      } catch (error) {
+        console.error('Error parsing backup file:', error);
+        alert('Lỗi: File sao lưu không hợp lệ.');
+      }
+    };
+    reader.readAsText(file);
+    
+    // Reset input so same file can be selected again if needed
+    e.target.value = '';
+  };
+
   // View Routing
   const renderContent = () => {
     switch (currentView) {
@@ -166,7 +245,14 @@ export default function App() {
       case ViewMode.TASKS:
         return <TaskList tasks={tasks} onToggle={handleTaskToggle} onAddTask={handleAddTask} />;
       case ViewMode.DOCUMENTS:
-        return <DocumentList documents={documents} onUpdateStatus={handleUpdateDocStatus} onAddDocument={handleAddDocument} />;
+        return (
+            <DocumentList 
+                documents={documents} 
+                onUpdateStatus={handleUpdateDocStatus} 
+                onAddDocument={handleAddDocument}
+                onEditDocument={handleEditDocument}
+            />
+        );
       default:
         return <div className="p-10 text-center text-gray-500">Đang phát triển...</div>;
     }
@@ -186,7 +272,7 @@ export default function App() {
           <p className="text-xs text-slate-400 mt-2 pl-10">Quản lý điều hành 4.0</p>
         </div>
 
-        <nav className="flex-1 p-4 space-y-1">
+        <nav className="flex-1 p-4 space-y-1 overflow-y-auto custom-scrollbar">
           <button 
             onClick={() => setCurrentView(ViewMode.DASHBOARD)}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${currentView === ViewMode.DASHBOARD ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/50 font-medium' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
@@ -221,6 +307,33 @@ export default function App() {
             Văn bản
             <span className="ml-auto bg-slate-700 text-xs px-2 py-0.5 rounded-full text-slate-300">{documents.filter(d => d.status === DocumentStatus.PENDING).length}</span>
           </button>
+
+          {/* System Menu */}
+          <div className="pt-4 pb-2 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Hệ thống</div>
+          <div className="px-4 space-y-2">
+            <button 
+              onClick={handleBackup}
+              className="w-full flex items-center gap-3 px-4 py-2 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white transition-all text-sm"
+            >
+              <Download className="w-4 h-4" />
+              Sao lưu dữ liệu
+            </button>
+            <button 
+              onClick={handleRestoreClick}
+              className="w-full flex items-center gap-3 px-4 py-2 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white transition-all text-sm"
+            >
+              <Upload className="w-4 h-4" />
+              Phục hồi dữ liệu
+            </button>
+            <input 
+              type="file" 
+              ref={fileInputRef} 
+              className="hidden" 
+              accept=".json" 
+              onChange={handleFileChange}
+            />
+          </div>
+
         </nav>
 
         <div className="p-4 border-t border-slate-700">
