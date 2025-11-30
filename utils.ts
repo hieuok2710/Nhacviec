@@ -41,15 +41,6 @@ export const isSameDay = (d1: Date, d2: Date): boolean => {
   );
 };
 
-// Hàm tính số tuần (ISO week number)
-export const getWeekNumber = (date: Date): number => {
-  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-  const dayNum = d.getUTCDay() || 7;
-  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
-  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-  return Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
-};
-
 export const isOverdue = (date: Date): boolean => {
   const now = new Date();
   now.setHours(0, 0, 0, 0);
@@ -74,21 +65,7 @@ export const getRelativeTimeLabel = (date: Date): string => {
   return formatDate(date).split(',')[1]?.trim() || formatDate(date);
 };
 
-export const hexToRgba = (hex: string, alpha: number): string => {
-  let c: any;
-  if(/^#([A-Fa-f0-9]{3}){1,2}$/.test(hex)){
-      c= hex.substring(1).split('');
-      if(c.length== 3){
-          c= [c[0], c[0], c[1], c[1], c[2], c[2]];
-      }
-      c= '0x'+c.join('');
-      return 'rgba('+[(c>>16)&255, (c>>8)&255, c&255].join(',')+','+alpha+')';
-  }
-  return hex; // Fallback if invalid hex
-};
-
 // Styling helpers
-// NOTE: These may be overridden by dynamic colors in components
 export const getEventTypeColor = (type: EventType): string => {
   switch (type) {
     case EventType.MEETING: return 'bg-blue-100 text-blue-700 border-blue-200';
